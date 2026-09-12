@@ -107,6 +107,7 @@ h1{font-size:23px;font-weight:600;margin:0}
 
 <div class="card" id="roster" style="display:none;padding:15px 17px;margin-bottom:16px"></div>
 <div class="banner" id="banner"></div>
+<div class="card" id="session" style="overflow:hidden;margin-bottom:18px"></div>
 
 <div class="kpis">
   <div class="kpi"><div class="lab" id="k1lab">Left this week</div><div class="val" id="k1">—</div></div>
@@ -144,7 +145,7 @@ h1{font-size:23px;font-weight:600;margin:0}
     <span><span class="dot" style="background:var(--amber);display:inline-block;margin-right:7px"></span>in scripting</span>
     <span><span class="dot" style="background:var(--red);display:inline-block;margin-right:7px"></span>not started</span>
     <span><span class="dot" style="background:#3a4152;display:inline-block;margin-right:7px"></span>already posted</span>
-    <span id="duenote" style="display:none">script due = post date &minus; <b id="lead">12</b> days</span>
+    <span id="duenote" style="display:none">Mon&ndash;Wed posts are due Friday, Thu&ndash;Sat posts are due Wednesday</span>
   </div>
   <div class="filters" id="filters"></div>
   <div class="grid7" id="dows"></div>
@@ -159,7 +160,7 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 5:'script approval',6:'to film',7:'in edit',8:'changes',9:'approval',10:'to post',
 11:'ready',12:'posted',13:'repost'};
 
-var V=[], RATE={}, CREATORS=[], LEAD_DAYS=12;
+var V=[], RATE={}, CREATORS=[];
 var chosen={}, calMode='post', who='all', saving=false;
 var BUILTIN=[];
 
@@ -188,7 +189,29 @@ function dmy(x){return x.toLocaleDateString('en-GB',{day:'numeric',month:'short'
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function notionURL(id){return 'https://notion.so/'+String(id).replace(/-/g,'')}
 function pdate(v){return v.postDate?startOfDay(new Date(v.postDate)):null}
-function dueOf(v){var p=pdate(v);return p?addD(p,-LEAD_DAYS):null}
+// The cycle sets the deadline. Friday's session covers Mon, Tue and Wed;
+// Wednesday's covers Thu, Fri and Sat. No Sunday posts.
+var DUE_OFFSET={1:-3,2:-4,3:-5,4:-1,5:-2,6:-3,0:-2};
+function dueOf(v){var p=pdate(v);return p?addD(p,DUE_OFFSET[p.getDay()]):null}
+
+// Tue and Thu are topic days; Wed and Fri are scripting days.
+function sessionFor(day){
+  var d=day.getDay();
+  if(d===2||d===4) return {kind:'topics'};
+  if(d===3) return {kind:'script',covers:[addD(day,1),addD(day,2),addD(day,3)]};
+  if(d===5) return {kind:'script',covers:[addD(day,3),addD(day,4),addD(day,5)]};
+  return null;
+}
+function nextSessionDay(from){
+  for(var i=0;i<8;i++){var d=addD(from,i); if(sessionFor(d)) return d}
+  return null;
+}
+function onDates(dates){
+  return V.filter(function(v){var p=pdate(v);
+    return p&&dates.some(function(d){return same(d,p)})})
+    .sort(function(a,b){return pdate(a)-pdate(b)});
+}
+function bankOf(c){return V.filter(function(v){return v.creator===c&&v.stage===1}).length}
 function tone(s){return s>=12?'n':(s>=5?'g':(s>=3?'a':'r'))}
 function toneHex(s){return s>=12?'#3a4152':(s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)'))}
 function label(s){return STAGES[s]||('stage '+s)}
@@ -227,7 +250,9 @@ function gapFor(c){
            short: Math.max(0,Math.round(rateOf(c))-nx.length),
            total: nx.length };
 }
-function recFor(c){var g=gapFor(c);return g.need+g.short}
+// Never recommend zero — a fully covered week is the moment to get ahead on
+// the next one, so the floor is 1.
+function recFor(c){var g=gapFor(c);return Math.max(1,g.need+g.short)}
 function rateOf(c){return RATE[c]||1}
 
 function showBanner(msg){
@@ -244,10 +269,9 @@ async function load(fresh){
     if(!r.ok) throw new Error('api returned '+r.status);
     var j=await r.json();
     if(j.error) throw new Error(j.error);
-    V=j.videos||[]; RATE=j.rates||{}; CREATORS=j.creators||[]; LEAD_DAYS=j.leadDays||12;
+    V=j.videos||[]; RATE=j.rates||{}; CREATORS=j.creators||[];
     BUILTIN=j.builtIn||[];
     renderRoster();
-    document.getElementById('lead').textContent=LEAD_DAYS;
     document.getElementById('hsub').textContent=
       'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · '+
       V.filter(stale).length+' stuck past their post date · synced '+
@@ -258,6 +282,53 @@ async function load(fresh){
     showBanner('Could not reach Notion — '+e.message+'. Retrying in 20s.');
     setTimeout(function(){load(true)},20000);
   }
+}
+
+function dayName(x){return x.toLocaleDateString('en-GB',{weekday:'long'})}
+function shortDay(x){return x.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}
+
+function renderSession(){
+  var box=document.getElementById('session');
+  var today=sessionFor(TODAY);
+  var day=today?TODAY:nextSessionDay(addD(TODAY,1));
+  var ses=today||sessionFor(day);
+  var isToday=!!today;
+  var when=isToday?'Today, '+dayName(TODAY)+' '+dmy(TODAY)
+                  :'Next up · '+dayName(day)+' '+dmy(day);
+
+  if(ses.kind==='topics'){
+    var rows=CREATORS.map(function(c){return {c:c,n:bankOf(c)}}).sort(function(a,b){return a.n-b.n});
+    var total=rows.reduce(function(a,x){return a+x.n},0);
+    box.innerHTML='<div class="chd"><span class="name">Add topics to the bank</span>'+
+      '<span class="sub">'+when+'</span></div>'+
+      '<div style="padding:13px 16px">'+
+        '<div style="font-size:26px;font-weight:600;line-height:1">'+total+'</div>'+
+        '<div class="sub" style="margin-bottom:11px">ideas sitting at stage 1 across the roster</div>'+
+        rows.map(function(r){
+          return '<div class="crow" style="padding:6px 0"><span>'+esc(r.c)+'</span>'+
+          '<span class="chip '+(r.n?(r.n<3?'c-a':'c-g'):'c-r')+'">'+r.n+' idea'+(r.n===1?'':'s')+'</span></div>';
+        }).join('')+
+      '</div>';
+    return;
+  }
+
+  var scope=onDates(ses.covers);
+  var todo=scope.filter(function(v){return v.stage<5});
+  var cov=ses.covers.map(shortDay).join(', ');
+  box.innerHTML='<div class="chd"><span class="name">Script for '+cov+'</span>'+
+    '<span class="sub">'+when+'</span></div>'+
+    '<div style="padding:13px 16px '+(todo.length?'4px':'14px')+'">'+
+      '<div style="font-size:26px;font-weight:600;line-height:1;color:'+
+        (todo.length?'var(--amber)':'var(--green)')+'">'+todo.length+'</div>'+
+      '<div class="sub">to write, out of '+scope.length+' posting those days</div>'+
+    '</div>'+
+    todo.map(function(v){
+      return '<div class="crow">'+
+        '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
+        '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
+        '<span class="chip c-'+tone(v.stage)+'">'+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span>'+
+      '</div>';
+    }).join('');
 }
 
 function render(){
@@ -291,7 +362,7 @@ function render(){
   document.getElementById('dec').innerHTML=CREATORS.map(function(c){
     var r=recFor(c), g=gapFor(c);
     var pickVal=chosen[c]!==undefined?chosen[c]:r;
-    var opts=[Math.max(0,r-1),r,r+1,r+2].filter(function(x,i,a){return a.indexOf(x)===i});
+    var opts=[Math.max(1,r-1),r,r+1,r+2].filter(function(x,i,a){return a.indexOf(x)===i});
     var u=undated(c), st=staleOf(c);
 
     function weekLine(lab,w,range){
@@ -319,7 +390,7 @@ function render(){
     else if(g.need) why=g.need+' of next week\'s '+g.total+' still need writing.';
     else if(g.short) why='Only '+g.total+' dated against '+Math.round(rateOf(c))+' a normal week, so '+
       r+' fills the empty slots.';
-    else why='Next week is fully scripted.';
+    else why='Next week is fully scripted, so '+r+' gets a head start on the week after.';
 
     return '<div class="card" style="overflow:hidden">'+
       '<div class="chd"><span class="name">'+esc(c)+'</span><span class="sub">posts '+rateOf(c)+'/wk</span></div>'+
@@ -331,7 +402,7 @@ function render(){
         }).join('')+'</div>'+
         '<div class="why">'+why+'</div>'+
         '<div class="sub" style="margin-top:9px;border-top:1px solid var(--line);padding-top:9px">'+
-          u+' written without a date'+
+          bankOf(c)+' in the topic bank · '+u+' written without a date'+
           (st?' · <span style="color:var(--amber)">'+st+' stuck past date</span>':'')+
         '</div>'+
       '</div></div>';
@@ -341,6 +412,7 @@ function render(){
     b.onclick=function(){chosen[b.parentNode.dataset.c]=+b.dataset.v;
       document.getElementById('savenote').textContent='';render()}});
 
+  renderSession();
   renderCal();
 }
 
