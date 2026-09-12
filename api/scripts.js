@@ -17,8 +17,7 @@ const BOARDS = [
   { creator: 'Emtech',  ds: '328508e9-9dda-8000-b3c9-000b0d791507' },
   { creator: 'Duncan',  ds: '328508e9-9dda-8186-b4ca-000bd212e84b' },
   { creator: 'Valeri',  ds: 'f0dbec00-505d-4e16-8e51-b2fcfea21445' },
-  { creator: 'Dmytro',  ds: '36b508e9-9dda-8004-a37f-000b460c8c46' },
-  { creator: 'Jonathan',ds: '370508e9-9dda-807b-9554-000ba747fde7' }
+  { creator: 'Dmytro',  ds: '36b508e9-9dda-8004-a37f-000b460c8c46' }
   // David Iya and Nicole McCain post on the calendar but I only have the
   // ID prefixes (898508e9… and 25b449d2…). Paste the full source data
   // source IDs here and they appear everywhere automatically.
