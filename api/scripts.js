@@ -16,8 +16,7 @@ const BOARDS = [
   { creator: 'Lindsay', ds: '301508e9-9dda-811b-83c7-000b46be09b1' },
   { creator: 'Emtech',  ds: '328508e9-9dda-8000-b3c9-000b0d791507' },
   { creator: 'Duncan',  ds: '328508e9-9dda-8186-b4ca-000bd212e84b' },
-  { creator: 'Valeri',  ds: 'f0dbec00-505d-4e16-8e51-b2fcfea21445' },
-  { creator: 'Dmytro',  ds: '36b508e9-9dda-8004-a37f-000b460c8c46' }
+  { creator: 'Valeri',  ds: 'f0dbec00-505d-4e16-8e51-b2fcfea21445' }
   // David Iya and Nicole McCain post on the calendar but I only have the
   // ID prefixes (898508e9… and 25b449d2…). Paste the full source data
   // source IDs here and they appear everywhere automatically.
@@ -30,7 +29,33 @@ const PINNED_RATE = {};
 // Days a script should be approved before the video posts.
 const LEAD_DAYS = 12;
 
-let cache = null;
+// Cache is keyed by the roster in play, so adding a creator does not serve
+// a stale list back from a previous request.
+const cache = new Map();
+
+// "Name:id,Name:id" from the page's own roster editor. Ids are normalised
+// and format-checked; anything malformed is dropped rather than queried.
+function parseExtra(raw) {
+  if (!raw) return [];
+  return String(raw).split(',').slice(0, 12).map(pair => {
+    const i = pair.indexOf(':');
+    if (i < 1) return null;
+    const creator = pair.slice(0, i).trim().slice(0, 40);
+    const hex = pair.slice(i + 1).trim().replace(/-/g, '').toLowerCase();
+    if (!creator || !/^[0-9a-f]{32}$/.test(hex)) return null;
+    const ds = [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+    return { creator, ds };
+  }).filter(Boolean);
+}
+
+function rosterFor(query) {
+  const hidden = String(query.hide || '').split(',').map(x => x.trim()).filter(Boolean);
+  const extra = parseExtra(query.extra);
+  const seen = new Set();
+  return BOARDS.concat(extra)
+    .filter(b => !hidden.includes(b.creator))
+    .filter(b => { if (seen.has(b.ds)) return false; seen.add(b.ds); return true; });
+}
 
 function headers() {
   return {
@@ -118,7 +143,7 @@ async function queryBoard(board) {
   return out;
 }
 
-function measureRates(videos) {
+function measureRates(videos, roster) {
   const now = Date.now();
   const windowMs = 28 * 864e5;
   const counts = {};
@@ -129,7 +154,7 @@ function measureRates(videos) {
     counts[v.creator] = (counts[v.creator] || 0) + 1;
   }
   const rates = {};
-  for (const b of BOARDS) {
+  for (const b of roster) {
     if (PINNED_RATE[b.creator] !== undefined) { rates[b.creator] = PINNED_RATE[b.creator]; continue; }
     const n = counts[b.creator] || 0;
     rates[b.creator] = n ? Math.round((n / 4) * 2) / 2 : 1;
@@ -138,10 +163,15 @@ function measureRates(videos) {
 }
 
 export default async function handler(req, res) {
-  const fresh = req.query && req.query.fresh === '1';
-  if (!fresh && cache && Date.now() - cache.at < 20000) {
+  const query = req.query || {};
+  const fresh = query.fresh === '1';
+  const roster = rosterFor(query);
+  const ckey = roster.map(b => b.ds).join('|');
+
+  const hit = cache.get(ckey);
+  if (!fresh && hit && Date.now() - hit.at < 20000) {
     res.setHeader('x-cache', 'hit');
-    return res.status(200).json(cache.payload);
+    return res.status(200).json(hit.payload);
   }
 
   if (!process.env.NOTION_TOKEN) {
@@ -149,7 +179,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const chunks = await Promise.all(BOARDS.map(b =>
+    const chunks = await Promise.all(roster.map(b =>
       queryBoard(b).catch(e => ({ __err: b.creator + ': ' + e.message }))
     ));
     const videos = [];
@@ -159,13 +189,15 @@ export default async function handler(req, res) {
     }
     const payload = {
       videos,
-      rates: measureRates(videos),
+      rates: measureRates(videos, roster),
       leadDays: LEAD_DAYS,
-      creators: BOARDS.map(b => b.creator),
+      creators: roster.map(b => b.creator),
+      builtIn: BOARDS.map(b => b.creator),
       problems,
       syncedAt: new Date().toISOString()
     };
-    cache = { at: Date.now(), payload };
+    if (cache.size > 12) cache.clear();
+    cache.set(ckey, { at: Date.now(), payload });
     res.setHeader('x-cache', 'miss');
     return res.status(200).json(payload);
   } catch (e) {
