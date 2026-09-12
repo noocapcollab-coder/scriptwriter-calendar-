@@ -90,6 +90,25 @@ function findPostDate(props) {
   return fallback;
 }
 
+// The Sponsor / Personal tag. Property names differ per board, so match on
+// the value rather than the column name.
+function findKind(props) {
+  for (const k in props) {
+    const p = props[k];
+    if (!p) continue;
+    let vals = [];
+    if (p.type === 'select' && p.select) vals = [p.select.name];
+    else if (p.type === 'multi_select' && Array.isArray(p.multi_select)) vals = p.multi_select.map(x => x.name);
+    else continue;
+    for (const v of vals) {
+      if (!v) continue;
+      if (/sponsor/i.test(v)) return 'Sponsor';
+      if (/personal/i.test(v)) return 'Personal';
+    }
+  }
+  return null;
+}
+
 function titleOf(props) {
   const t = findByType(props, 'title');
   if (!t || !t.title || !t.title.length) return '';
@@ -135,6 +154,7 @@ async function queryBoard(board) {
         title,
         stage,
         stageLabel: label,
+        kind: findKind(props),
         postDate: findPostDate(props)
       });
     }
