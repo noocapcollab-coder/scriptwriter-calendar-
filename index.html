@@ -47,6 +47,9 @@ h1{font-size:23px;font-weight:600;margin:0}
 .c-g{background:var(--greenbg);color:var(--green)}
 .c-a{background:var(--amberbg);color:var(--amber)}
 .c-r{background:var(--redbg);color:var(--red)}
+.c-n{background:#161b27;color:var(--tx3)}
+.day.past{opacity:.5}
+.day.today{border-color:var(--blue)}
 .chd{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:11px 16px;background:var(--panel2);border-bottom:1px solid var(--line);
   border-radius:12px 12px 0 0}
@@ -133,6 +136,7 @@ h1{font-size:23px;font-weight:600;margin:0}
       <button id="mp">&lsaquo;</button>
       <span id="mlab" style="min-width:132px;text-align:center;font-weight:500"></span>
       <button id="mn">&rsaquo;</button>
+      <button id="mtoday">Today</button>
       <span style="width:10px"></span>
       <button id="vpost" class="on">Post dates</button>
       <button id="vdue">Script due</button>
@@ -142,6 +146,7 @@ h1{font-size:23px;font-weight:600;margin:0}
     <span><span class="dot" style="background:var(--green);display:inline-block;margin-right:7px"></span>script approved</span>
     <span><span class="dot" style="background:var(--amber);display:inline-block;margin-right:7px"></span>in scripting</span>
     <span><span class="dot" style="background:var(--red);display:inline-block;margin-right:7px"></span>not started</span>
+    <span><span class="dot" style="background:#3a4152;display:inline-block;margin-right:7px"></span>already posted</span>
     <span id="duenote" style="display:none">script due = post date &minus; <b id="lead">12</b> days</span>
   </div>
   <div class="filters" id="filters"></div>
@@ -187,8 +192,8 @@ function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp
 function notionURL(id){return 'https://notion.so/'+String(id).replace(/-/g,'')}
 function pdate(v){return v.postDate?startOfDay(new Date(v.postDate)):null}
 function dueOf(v){var p=pdate(v);return p?addD(p,-LEAD_DAYS):null}
-function tone(s){return s>=5?'g':(s>=3?'a':'r')}
-function toneHex(s){return s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)')}
+function tone(s){return s>=12?'n':(s>=5?'g':(s>=3?'a':'r'))}
+function toneHex(s){return s>=12?'#3a4152':(s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)'))}
 function label(s){return STAGES[s]||('stage '+s)}
 
 // A video only counts as banked stock if it has not gone out yet. Anything
@@ -315,8 +320,10 @@ function renderCal(){
   for(var i=0;i<42;i++){
     var day=addD(start,i),list=onDay(day),out=day.getMonth()!==calMonth.getMonth();
     if(i>=35&&out) continue;
-    cells+='<button class="day'+(out?' out':'')+(same(day,selDay)?' sel':'')+'" data-i="'+i+'">'+
-      '<div class="dnum"'+(same(day,TODAY)?' style="color:var(--blue);font-weight:600"':'')+'>'+day.getDate()+'</div>'+
+    var isToday=same(day,TODAY), isPast=day<TODAY;
+    cells+='<button class="day'+(out?' out':'')+(isPast&&!isToday?' past':'')+
+      (isToday?' today':'')+(same(day,selDay)?' sel':'')+'" data-i="'+i+'">'+
+      '<div class="dnum"'+(isToday?' style="color:var(--blue);font-weight:600"':'')+'>'+day.getDate()+'</div>'+
       '<div class="dots">'+list.slice(0,12).map(function(v){
         return '<span class="dot" style="background:'+toneHex(v.stage)+'"></span>'}).join('')+'</div></button>';
   }
@@ -327,8 +334,9 @@ function renderCal(){
     b.onclick=function(){who=b.dataset.w;renderCal()}});
 
   var sel=onDay(selDay),lab=calMode==='due'?'script due':'posting';
+  var back=selDay<TODAY?' <span class="sub">· in the past</span>':'';
   document.getElementById('daypanel').innerHTML=
-    '<div class="chd"><span class="name">'+fmt(selDay)+'</span><span class="sub">'+
+    '<div class="chd"><span class="name">'+fmt(selDay)+back+'</span><span class="sub">'+
     (sel.length?sel.length+' '+lab+' · '+sel.filter(function(v){return v.stage<5}).length+' unscripted':'nothing '+lab)+
     '</span></div>'+
     (sel.length?sel.map(function(v){return '<div class="crow">'+
@@ -450,6 +458,10 @@ document.getElementById('rosterbtn').onclick=function(){
 
 document.getElementById('buf').oninput=function(){buffer=+this.value;chosen={};render()};
 document.getElementById('reload').onclick=function(){load(true)};
+document.getElementById('mtoday').onclick=function(){
+  calMonth=new Date(TODAY.getFullYear(),TODAY.getMonth(),1);
+  selDay=new Date(TODAY); renderCal();
+};
 document.getElementById('mp').onclick=function(){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()-1,1);renderCal()};
 document.getElementById('mn').onclick=function(){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+1,1);renderCal()};
 document.getElementById('vpost').onclick=function(){calMode='post';this.classList.add('on');document.getElementById('vdue').classList.remove('on');renderCal()};
