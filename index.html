@@ -48,6 +48,9 @@ h1{font-size:23px;font-weight:600;margin:0}
 .c-a{background:var(--amberbg);color:var(--amber)}
 .c-r{background:var(--redbg);color:var(--red)}
 .c-n{background:#161b27;color:var(--tx3)}
+.k{font-size:10.5px;padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:.02em}
+.k-s{background:var(--bluebg);color:#93aaff}
+.k-p{background:#1a1f2c;color:var(--tx2)}
 .day.past{opacity:.5}
 .day.today{border-color:var(--blue)}
 .chd{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -215,6 +218,10 @@ function bankOf(c){return V.filter(function(v){return v.creator===c&&v.stage===1
 function tone(s){return s>=12?'n':(s>=5?'g':(s>=3?'a':'r'))}
 function toneHex(s){return s>=12?'#3a4152':(s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)'))}
 function label(s){return STAGES[s]||('stage '+s)}
+function kindChip(v){
+  if(!v.kind) return '';
+  return '<span class="k '+(v.kind==='Sponsor'?'k-s':'k-p')+'">'+esc(v.kind)+'</span>';
+}
 
 // A video only counts as banked stock if it has not gone out yet. Anything
 // still short of "posted" whose post date is already behind us is stuck,
@@ -326,7 +333,8 @@ function renderSession(){
       return '<div class="crow">'+
         '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
         '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
-        '<span class="chip c-'+tone(v.stage)+'">'+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span>'+
+        '<span style="white-space:nowrap">'+kindChip(v)+
+        '<span class="chip c-'+tone(v.stage)+'">'+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span></span>'+
       '</div>';
     }).join('');
 }
@@ -356,7 +364,8 @@ function render(){
       risk.map(function(v){return '<div class="crow" style="border-top-color:rgba(241,107,107,.14)">'+
         '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
         esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
-        '<span class="chip c-r">posts '+dmy(pdate(v))+' · '+esc(label(v.stage))+'</span></div>'}).join('')
+        '<span style="white-space:nowrap">'+kindChip(v)+
+        '<span class="chip c-r">posts '+dmy(pdate(v))+' · '+esc(label(v.stage))+'</span></span></div>'}).join('')
     : '<div class="empty">Nothing has blown its script deadline.</div>';
 
   document.getElementById('dec').innerHTML=CREATORS.map(function(c){
@@ -454,13 +463,15 @@ function renderCal(){
   var back=selDay<TODAY?' <span class="sub">· in the past</span>':'';
   document.getElementById('daypanel').innerHTML=
     '<div class="chd"><span class="name">'+fmt(selDay)+back+'</span><span class="sub">'+
-    (sel.length?sel.length+' '+lab+' · '+sel.filter(function(v){return v.stage<5}).length+' unscripted':'nothing '+lab)+
+    (sel.length?sel.length+' '+lab+' · '+sel.filter(function(v){return v.kind==='Sponsor'}).length+
+      ' sponsor · '+sel.filter(function(v){return v.stage<5}).length+' unscripted':'nothing '+lab)+
     '</span></div>'+
     (sel.length?sel.map(function(v){return '<div class="crow">'+
       '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
       esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
+      '<span style="white-space:nowrap">'+kindChip(v)+
       '<span class="chip c-'+tone(v.stage)+'">'+v.stage+' · '+esc(label(v.stage))+
-      (calMode==='due'&&pdate(v)?' · posts '+dmy(pdate(v)):'')+'</span></div>'}).join('')
+      (calMode==='due'&&pdate(v)?' · posts '+dmy(pdate(v)):'')+'</span></span></div>'}).join('')
       :'<div class="empty">Clear day.</div>');
 }
 
