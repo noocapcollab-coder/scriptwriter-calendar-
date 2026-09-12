@@ -1,0 +1,175 @@
+// api/scripts.js — feeds scripts.html
+//
+// Reads every creator REELS board straight from its source data source,
+// returns one flat list of videos plus a measured post rate per creator.
+// Property names differ per board, so nothing is hardcoded: the title comes
+// from whichever property is type 'title', status from type 'status' OR
+// 'select', and the post date from the first date property whose name
+// mentions "post" (falling back to any date property).
+
+const NOTION = 'https://api.notion.com/v1';
+const VERSION = '2025-09-03';
+
+const BOARDS = [
+  { creator: 'Brad',    ds: '28b508e9-9dda-81ba-8d7f-000b84b83fbd' },
+  { creator: 'Chris',   ds: '2a1508e9-9dda-8125-bd63-000bb75578dd' },
+  { creator: 'Lindsay', ds: '301508e9-9dda-811b-83c7-000b46be09b1' },
+  { creator: 'Emtech',  ds: '328508e9-9dda-8000-b3c9-000b0d791507' },
+  { creator: 'Duncan',  ds: '328508e9-9dda-8186-b4ca-000bd212e84b' },
+  { creator: 'Valeri',  ds: 'f0dbec00-505d-4e16-8e51-b2fcfea21445' },
+  { creator: 'Dmytro',  ds: '36b508e9-9dda-8004-a37f-000b460c8c46' },
+  { creator: 'Jonathan',ds: '370508e9-9dda-807b-9554-000ba747fde7' }
+  // David Iya and Nicole McCain post on the calendar but I only have the
+  // ID prefixes (898508e9… and 25b449d2…). Paste the full source data
+  // source IDs here and they appear everywhere automatically.
+];
+
+// Leave a creator out to measure their rate from the last 4 weeks of posts.
+// Put a number here to pin it instead (contracted output, new creator, etc).
+const PINNED_RATE = {};
+
+// Days a script should be approved before the video posts.
+const LEAD_DAYS = 12;
+
+let cache = null;
+
+function headers() {
+  return {
+    'Authorization': 'Bearer ' + process.env.NOTION_TOKEN,
+    'Notion-Version': VERSION,
+    'Content-Type': 'application/json'
+  };
+}
+
+function findByType(props, type) {
+  for (const k in props) if (props[k] && props[k].type === type) return props[k];
+  return null;
+}
+
+function findStatus(props) {
+  for (const k in props) {
+    const p = props[k];
+    if (!p) continue;
+    if ((p.type === 'status' || p.type === 'select') && /status/i.test(k)) return p;
+  }
+  return findByType(props, 'status') || findByType(props, 'select');
+}
+
+function findPostDate(props) {
+  let fallback = null;
+  for (const k in props) {
+    const p = props[k];
+    if (!p || p.type !== 'date' || !p.date || !p.date.start) continue;
+    if (/post/i.test(k)) return p.date.start;
+    if (!fallback) fallback = p.date.start;
+  }
+  return fallback;
+}
+
+function titleOf(props) {
+  const t = findByType(props, 'title');
+  if (!t || !t.title || !t.title.length) return '';
+  return t.title.map(x => x.plain_text).join('').trim();
+}
+
+function stageOf(label) {
+  if (!label) return null;
+  if (/archive/i.test(label)) return 'archive';
+  const m = String(label).match(/^\s*(\d{1,2})/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+async function queryBoard(board) {
+  const out = [];
+  let cursor;
+  do {
+    const body = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+    const r = await fetch(`${NOTION}/data_sources/${board.ds}/query`, {
+      method: 'POST', headers: headers(), body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`${board.creator} ${r.status} ${txt.slice(0, 180)}`);
+    }
+    const j = await r.json();
+    for (const page of j.results || []) {
+      if (page.archived || page.in_trash) continue;
+      const props = page.properties || {};
+      const label = (() => {
+        const s = findStatus(props);
+        if (!s) return null;
+        return s.status ? s.status.name : (s.select ? s.select.name : null);
+      })();
+      const stage = stageOf(label);
+      if (stage === null || stage === 'archive') continue;
+      const title = titleOf(props);
+      if (!title) continue;
+      out.push({
+        id: page.id,
+        creator: board.creator,
+        title,
+        stage,
+        stageLabel: label,
+        postDate: findPostDate(props)
+      });
+    }
+    cursor = j.has_more ? j.next_cursor : null;
+  } while (cursor);
+  return out;
+}
+
+function measureRates(videos) {
+  const now = Date.now();
+  const windowMs = 28 * 864e5;
+  const counts = {};
+  for (const v of videos) {
+    if (v.stage !== 12 || !v.postDate) continue;
+    const t = new Date(v.postDate).getTime();
+    if (isNaN(t) || t > now || now - t > windowMs) continue;
+    counts[v.creator] = (counts[v.creator] || 0) + 1;
+  }
+  const rates = {};
+  for (const b of BOARDS) {
+    if (PINNED_RATE[b.creator] !== undefined) { rates[b.creator] = PINNED_RATE[b.creator]; continue; }
+    const n = counts[b.creator] || 0;
+    rates[b.creator] = n ? Math.round((n / 4) * 2) / 2 : 1;
+  }
+  return rates;
+}
+
+export default async function handler(req, res) {
+  const fresh = req.query && req.query.fresh === '1';
+  if (!fresh && cache && Date.now() - cache.at < 20000) {
+    res.setHeader('x-cache', 'hit');
+    return res.status(200).json(cache.payload);
+  }
+
+  if (!process.env.NOTION_TOKEN) {
+    return res.status(500).json({ error: 'NOTION_TOKEN is not set in Vercel' });
+  }
+
+  try {
+    const chunks = await Promise.all(BOARDS.map(b =>
+      queryBoard(b).catch(e => ({ __err: b.creator + ': ' + e.message }))
+    ));
+    const videos = [];
+    const problems = [];
+    for (const c of chunks) {
+      if (c && c.__err) problems.push(c.__err); else videos.push(...c);
+    }
+    const payload = {
+      videos,
+      rates: measureRates(videos),
+      leadDays: LEAD_DAYS,
+      creators: BOARDS.map(b => b.creator),
+      problems,
+      syncedAt: new Date().toISOString()
+    };
+    cache = { at: Date.now(), payload };
+    res.setHeader('x-cache', 'miss');
+    return res.status(200).json(payload);
+  } catch (e) {
+    return res.status(500).json({ error: String(e && e.message || e) });
+  }
+}
