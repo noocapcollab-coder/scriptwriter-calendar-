@@ -100,9 +100,6 @@ h1{font-size:23px;font-weight:600;margin:0}
     <div class="sub" id="hsub">loading boards…</div>
   </div>
   <div class="row">
-    <span class="sub">stay</span>
-    <input type="range" id="buf" min="1" max="4" step="0.5" value="2">
-    <span style="font-weight:500;min-width:88px" id="buflab">2 weeks ahead</span>
     <button id="rosterbtn">Creators</button>
     <button id="reload">Reload</button>
   </div>
@@ -112,8 +109,8 @@ h1{font-size:23px;font-weight:600;margin:0}
 <div class="banner" id="banner"></div>
 
 <div class="kpis">
-  <div class="kpi"><div class="lab">Scripts banked</div><div class="val" id="k1">—</div></div>
-  <div class="kpi"><div class="lab">Weeks of runway</div><div class="val" id="k2">—</div></div>
+  <div class="kpi"><div class="lab">Posting this week</div><div class="val" id="k1">—</div></div>
+  <div class="kpi"><div class="lab">Posting next week</div><div class="val" id="k2">—</div></div>
   <div class="kpi"><div class="lab">To write next week</div><div class="val" id="k3" style="color:var(--blue)">—</div></div>
   <div class="kpi risk"><div class="lab">Locked dates, no script</div><div class="val" id="k4" style="color:var(--red)">—</div></div>
 </div>
@@ -163,7 +160,7 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 11:'ready',12:'posted',13:'repost'};
 
 var V=[], RATE={}, CREATORS=[], LEAD_DAYS=12;
-var buffer=2, chosen={}, calMode='post', who='all', saving=false;
+var chosen={}, calMode='post', who='all', saving=false;
 var BUILTIN=[];
 
 function readLS(k,fb){try{var v=JSON.parse(localStorage.getItem(k));return v||fb}catch(e){return fb}}
@@ -199,16 +196,27 @@ function label(s){return STAGES[s]||('stage '+s)}
 // A video only counts as banked stock if it has not gone out yet. Anything
 // still short of "posted" whose post date is already behind us is stuck,
 // not inventory, so it is counted separately as stale.
-function upcoming(v){var p=pdate(v);return !p||p>=TODAY}
+var thisWeek=mondayOf(TODAY);
+
 function stale(v){var p=pdate(v);return v.stage<12&&p&&p<TODAY}
-function banked(c){return V.filter(function(v){
-  return v.creator===c&&v.stage>=5&&v.stage<12&&upcoming(v)}).length}
-function inFlight(c){return V.filter(function(v){
-  return v.creator===c&&v.stage<5&&upcoming(v)}).length}
+function inWeek(v,w){var p=pdate(v);return p&&p>=w&&p<addD(w,7)}
+function slots(c,w){return V.filter(function(v){return v.creator===c&&inWeek(v,w)})}
+function scripted(list){return list.filter(function(v){return v.stage>=5}).length}
+// Script that exists but isn't holding a slot — written, not scheduled.
+function undated(c){return V.filter(function(v){
+  return v.creator===c&&v.stage>=5&&v.stage<12&&!pdate(v)}).length}
 function staleOf(c){return V.filter(function(v){return v.creator===c&&stale(v)}).length}
+
+// What she has to write = next week's slots with no script yet, plus however
+// many slots are missing against what this creator normally posts.
+function gapFor(c){
+  var nx=slots(c,nextWeek);
+  return { need: nx.filter(function(v){return v.stage<5}).length,
+           short: Math.max(0,Math.round(rateOf(c))-nx.length),
+           total: nx.length };
+}
+function recFor(c){var g=gapFor(c);return g.need+g.short}
 function rateOf(c){return RATE[c]||1}
-function runway(c){return banked(c)/rateOf(c)}
-function recFor(c){return Math.max(0,Math.round(rateOf(c)*(buffer+1)-banked(c)))}
 
 function showBanner(msg){
   var b=document.getElementById('banner');
@@ -241,17 +249,18 @@ async function load(fresh){
 }
 
 function render(){
-  document.getElementById('buflab').textContent=buffer+' week'+(buffer==1?'':'s')+' ahead';
-
-  var tb=0,tr=0,rec=0;
-  CREATORS.forEach(function(c){tb+=banked(c);tr+=rateOf(c);rec+=(chosen[c]!==undefined?chosen[c]:recFor(c))});
+  var tw=0,nw=0,rec=0;
+  CREATORS.forEach(function(c){
+    tw+=slots(c,thisWeek).length; nw+=slots(c,nextWeek).length;
+    rec+=(chosen[c]!==undefined?chosen[c]:recFor(c));
+  });
   var floor=addD(TODAY,-30);
   var risk=V.filter(function(v){var d=dueOf(v),p=pdate(v);
     return v.stage<5&&d&&d<=TODAY&&p&&p>=floor})
     .sort(function(a,b){return pdate(a)-pdate(b)});
 
-  document.getElementById('k1').textContent=tb;
-  document.getElementById('k2').textContent=tr?(tb/tr).toFixed(1):'—';
+  document.getElementById('k1').textContent=tw;
+  document.getElementById('k2').textContent=nw;
   document.getElementById('k3').textContent=rec;
   document.getElementById('k4').textContent=risk.length;
 
@@ -266,29 +275,51 @@ function render(){
     : '<div class="empty">Nothing has blown its script deadline.</div>';
 
   document.getElementById('dec').innerHTML=CREATORS.map(function(c){
-    var r=recFor(c), b=banked(c), f=inFlight(c), run=runway(c);
+    var r=recFor(c), g=gapFor(c);
     var pickVal=chosen[c]!==undefined?chosen[c]:r;
     var opts=[Math.max(0,r-1),r,r+1,r+2].filter(function(x,i,a){return a.indexOf(x)===i});
-    var covered=addD(TODAY,Math.round(run*7));
-    var pct=Math.min(100,Math.round(run/buffer*100));
-    var col=run>=buffer?'var(--green)':(run>=buffer*0.5?'var(--amber)':'var(--red)');
-    var why=run>=buffer
-      ? 'Already '+run.toFixed(1)+' weeks ahead, so '+r+' keeps that cushion where it is.'
-      : 'Runs dry around '+dmy(covered)+', so '+r+' pulls back to '+buffer+' weeks and covers what goes out.';
+    var u=undated(c), st=staleOf(c);
+
+    function weekLine(lab,w){
+      var list=slots(c,w), done=scripted(list), miss=list.length-done;
+      var pct=list.length?Math.round(done/list.length*100):0;
+      var col=miss===0?'var(--green)':(done?'var(--amber)':'var(--red)');
+      return '<div style="margin-bottom:11px">'+
+        '<div class="between" style="gap:8px">'+
+          '<span class="sub">'+lab+'</span>'+
+          '<span style="font-size:13px">'+
+            (list.length
+              ? '<b>'+list.length+'</b><span class="who"> posting · </span>'+
+                (miss?'<b style="color:var(--amber)">'+miss+'</b><span class="who"> need a script</span>'
+                     :'<span style="color:var(--green)">all scripted</span>')
+              : '<span class="who">nothing dated</span>')+
+          '</span>'+
+        '</div>'+
+        '<div class="meter" style="margin:7px 0 0"><i style="width:'+pct+'%;background:'+col+'"></i></div>'+
+      '</div>';
+    }
+
+    var why;
+    if(g.need&&g.short) why='Next week has '+g.total+' dated, '+g.need+' without a script, and '+
+      Math.round(rateOf(c))+' is the usual week, so '+r+' covers both.';
+    else if(g.need) why=g.need+' of next week\'s '+g.total+' still need writing.';
+    else if(g.short) why='Only '+g.total+' dated against '+Math.round(rateOf(c))+' a normal week, so '+
+      r+' fills the empty slots.';
+    else why='Next week is fully scripted.';
+
     return '<div class="card" style="overflow:hidden">'+
       '<div class="chd"><span class="name">'+esc(c)+'</span><span class="sub">posts '+rateOf(c)+'/wk</span></div>'+
-      '<div style="padding:13px 16px 15px">'+
-        '<div class="between" style="align-items:flex-end">'+
-          '<div><div style="font-size:26px;font-weight:600;line-height:1">'+b+'</div>'+
-          '<div class="sub">banked · '+f+' still in scripting'+
-            (staleOf(c)?' · <span style="color:var(--amber)">'+staleOf(c)+' stuck past date</span>':'')+
-          '</div></div>'+
-          '<div class="pick" data-c="'+esc(c)+'">'+opts.map(function(o){
-            return '<button data-v="'+o+'" class="'+(o===r?'rec ':'')+(o===pickVal?'sel':'')+'">'+o+'</button>'}).join('')+
-          '</div>'+
-        '</div>'+
-        '<div class="meter"><i style="width:'+pct+'%;background:'+col+'"></i></div>'+
+      '<div style="padding:14px 16px 15px">'+
+        weekLine('This week',thisWeek)+
+        weekLine('Next week',nextWeek)+
+        '<div class="pick" data-c="'+esc(c)+'" style="margin:13px 0 10px">'+opts.map(function(o){
+          return '<button data-v="'+o+'" class="'+(o===r?'rec ':'')+(o===pickVal?'sel':'')+'">'+o+'</button>'
+        }).join('')+'</div>'+
         '<div class="why">'+why+'</div>'+
+        '<div class="sub" style="margin-top:9px;border-top:1px solid var(--line);padding-top:9px">'+
+          u+' written without a date'+
+          (st?' · <span style="color:var(--amber)">'+st+' stuck past date</span>':'')+
+        '</div>'+
       '</div></div>';
   }).join('');
 
@@ -456,7 +487,6 @@ document.getElementById('rosterbtn').onclick=function(){
   this.classList.toggle('on',!open);
 };
 
-document.getElementById('buf').oninput=function(){buffer=+this.value;chosen={};render()};
 document.getElementById('reload').onclick=function(){load(true)};
 document.getElementById('mtoday').onclick=function(){
   calMonth=new Date(TODAY.getFullYear(),TODAY.getMonth(),1);
