@@ -73,6 +73,15 @@ h1{font-size:23px;font-weight:600;margin:0}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
 .filters button{padding:5px 12px;font-size:12.5px;border-radius:20px}
 .empty{padding:20px 16px;color:var(--tx3);font-size:13px}
+.rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+.rrow:first-of-type{border-top:0}
+.x{border:0;background:transparent;color:var(--tx3);font-size:16px;padding:0 6px;cursor:pointer}
+.x:hover{color:var(--red)}
+.field{background:#0b0e16;border:1px solid var(--line);border-radius:7px;color:var(--tx);
+  padding:7px 11px;font:inherit;font-size:13px}
+.field:focus{outline:none;border-color:var(--blue)}
+.err{color:var(--red);font-size:12.5px;min-height:18px}
 .banner{border:1px solid rgba(241,107,107,.4);background:var(--redbg);color:var(--red);
   border-radius:11px;padding:13px 16px;font-size:13px;margin-bottom:16px;display:none}
 @media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}}
@@ -91,10 +100,12 @@ h1{font-size:23px;font-weight:600;margin:0}
     <span class="sub">stay</span>
     <input type="range" id="buf" min="1" max="4" step="0.5" value="2">
     <span style="font-weight:500;min-width:88px" id="buflab">2 weeks ahead</span>
+    <button id="rosterbtn">Creators</button>
     <button id="reload">Reload</button>
   </div>
 </div>
 
+<div class="card" id="roster" style="display:none;padding:15px 17px;margin-bottom:16px"></div>
 <div class="banner" id="banner"></div>
 
 <div class="kpis">
@@ -148,6 +159,19 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 
 var V=[], RATE={}, CREATORS=[], LEAD_DAYS=12;
 var buffer=2, chosen={}, calMode='post', who='all', saving=false;
+var BUILTIN=[];
+
+function readLS(k,fb){try{var v=JSON.parse(localStorage.getItem(k));return v||fb}catch(e){return fb}}
+function writeLS(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+var EXTRA=readLS('noocap_scripts_extra',[]);
+var HIDDEN=readLS('noocap_scripts_hidden',[]);
+
+function rosterQS(){
+  var q=[];
+  if(EXTRA.length) q.push('extra='+encodeURIComponent(EXTRA.map(function(x){return x.creator+':'+x.ds}).join(',')));
+  if(HIDDEN.length) q.push('hide='+encodeURIComponent(HIDDEN.join(',')));
+  return q.join('&');
+}
 var TODAY=startOfDay(new Date());
 var calMonth=new Date(TODAY.getFullYear(),TODAY.getMonth(),1);
 var selDay=new Date(TODAY);
@@ -189,11 +213,15 @@ function showBanner(msg){
 
 async function load(fresh){
   try{
-    var r=await fetch('/api/scripts'+(fresh?'?fresh=1':''));
+    var parts=[]; if(fresh) parts.push('fresh=1');
+    var rq=rosterQS(); if(rq) parts.push(rq);
+    var r=await fetch('/api/scripts'+(parts.length?'?'+parts.join('&'):''));
     if(!r.ok) throw new Error('api returned '+r.status);
     var j=await r.json();
     if(j.error) throw new Error(j.error);
     V=j.videos||[]; RATE=j.rates||{}; CREATORS=j.creators||[]; LEAD_DAYS=j.leadDays||12;
+    BUILTIN=j.builtIn||[];
+    renderRoster();
     document.getElementById('lead').textContent=LEAD_DAYS;
     document.getElementById('hsub').textContent=
       'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · '+
@@ -344,6 +372,80 @@ document.getElementById('save').onclick=async function(){
     catch(e2){ note.textContent='could not copy — check clipboard permissions'; }
     document.body.removeChild(ta);
   }
+};
+
+function normId(raw){
+  var hex=String(raw||'').trim().replace(/-/g,'').toLowerCase();
+  var m=hex.match(/[0-9a-f]{32}/);
+  if(!m) return null;
+  hex=m[0];
+  return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+}
+
+function renderRoster(){
+  var box=document.getElementById('roster');
+  var rows=BUILTIN.map(function(c){
+    return {name:c,kind:'built in',hidden:HIDDEN.indexOf(c)>=0};
+  }).concat(EXTRA.map(function(x){
+    return {name:x.creator,kind:'added here',hidden:false,ds:x.ds};
+  }));
+
+  box.innerHTML =
+    '<div style="font-size:14px;font-weight:500;margin-bottom:10px">Creators on this dashboard</div>'+
+    rows.map(function(r){
+      return '<div class="rrow"><span'+(r.hidden?' style="color:var(--tx3);text-decoration:line-through"':'')+'>'+
+        esc(r.name)+' <span class="sub">· '+r.kind+'</span></span>'+
+        '<button class="x" data-act="'+(r.hidden?'show':'hide')+'" data-n="'+esc(r.name)+'" '+
+        'aria-label="'+(r.hidden?'show':'remove')+' '+esc(r.name)+'">'+(r.hidden?'↺':'×')+'</button></div>';
+    }).join('')+
+    '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">'+
+      '<div class="row" style="flex-wrap:wrap">'+
+        '<input class="field" id="nname" placeholder="Creator name" style="width:170px">'+
+        '<input class="field" id="nds" placeholder="Source data source ID" style="flex:1;min-width:250px">'+
+        '<button id="nadd">Add</button>'+
+      '</div>'+
+      '<div class="err" id="nerr"></div>'+
+      '<div class="sub">Duplicate an existing REELS board so the numbered statuses match, share it '+
+      'with the NOOCAP Ops Dashboard integration, then paste the source data source ID here. '+
+      'Saved in this browser only.</div>'+
+    '</div>';
+
+  Array.prototype.forEach.call(box.querySelectorAll('.x'),function(b){
+    b.onclick=function(){
+      var n=b.dataset.n;
+      if(b.dataset.act==='hide'){
+        if(BUILTIN.indexOf(n)>=0){ HIDDEN.push(n); writeLS('noocap_scripts_hidden',HIDDEN) }
+        else { EXTRA=EXTRA.filter(function(x){return x.creator!==n}); writeLS('noocap_scripts_extra',EXTRA) }
+      } else {
+        HIDDEN=HIDDEN.filter(function(x){return x!==n}); writeLS('noocap_scripts_hidden',HIDDEN);
+      }
+      chosen={}; who='all'; load(true);
+    };
+  });
+
+  var nameEl=document.getElementById('nname'), dsEl=document.getElementById('nds'),
+      errEl=document.getElementById('nerr');
+  function clearErr(){errEl.textContent=''}
+  nameEl.oninput=clearErr; dsEl.oninput=clearErr;
+
+  document.getElementById('nadd').onclick=function(){
+    var name=nameEl.value.trim(), ds=normId(dsEl.value);
+    if(!name){ errEl.textContent='Enter a creator name first'; nameEl.focus(); return }
+    if(!ds){ errEl.textContent='That does not look like a Notion data source ID — it should be 32 hex characters'; dsEl.focus(); return }
+    if(BUILTIN.indexOf(name)>=0||EXTRA.some(function(x){return x.creator===name})){
+      errEl.textContent=name+' is already on the list'; return }
+    if(EXTRA.some(function(x){return x.ds===ds})){ errEl.textContent='That board is already added'; return }
+    EXTRA.push({creator:name,ds:ds}); writeLS('noocap_scripts_extra',EXTRA);
+    nameEl.value=''; dsEl.value=''; errEl.textContent='';
+    chosen={}; load(true);
+  };
+}
+
+document.getElementById('rosterbtn').onclick=function(){
+  var box=document.getElementById('roster');
+  var open=box.style.display!=='none';
+  box.style.display=open?'none':'block';
+  this.classList.toggle('on',!open);
 };
 
 document.getElementById('buf').oninput=function(){buffer=+this.value;chosen={};render()};
