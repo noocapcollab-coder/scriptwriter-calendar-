@@ -110,7 +110,7 @@ h1{font-size:23px;font-weight:600;margin:0}
   <p class="sechd">How many for next week</p>
   <div class="dec" id="dec"></div>
   <div class="row" style="margin-top:14px">
-    <button id="save" style="border-color:#33507f;color:var(--tx)">Save next week's plan to Notion</button>
+    <button id="save" style="border-color:#33507f;color:var(--tx)">Copy next week's plan</button>
     <span class="sub" id="savenote"></span>
   </div>
 </div>
@@ -167,8 +167,16 @@ function tone(s){return s>=5?'g':(s>=3?'a':'r')}
 function toneHex(s){return s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)')}
 function label(s){return STAGES[s]||('stage '+s)}
 
-function banked(c){return V.filter(function(v){return v.creator===c&&v.stage>=5&&v.stage<12}).length}
-function inFlight(c){return V.filter(function(v){return v.creator===c&&v.stage<5}).length}
+// A video only counts as banked stock if it has not gone out yet. Anything
+// still short of "posted" whose post date is already behind us is stuck,
+// not inventory, so it is counted separately as stale.
+function upcoming(v){var p=pdate(v);return !p||p>=TODAY}
+function stale(v){var p=pdate(v);return v.stage<12&&p&&p<TODAY}
+function banked(c){return V.filter(function(v){
+  return v.creator===c&&v.stage>=5&&v.stage<12&&upcoming(v)}).length}
+function inFlight(c){return V.filter(function(v){
+  return v.creator===c&&v.stage<5&&upcoming(v)}).length}
+function staleOf(c){return V.filter(function(v){return v.creator===c&&stale(v)}).length}
 function rateOf(c){return RATE[c]||1}
 function runway(c){return banked(c)/rateOf(c)}
 function recFor(c){return Math.max(0,Math.round(rateOf(c)*(buffer+1)-banked(c)))}
@@ -188,7 +196,8 @@ async function load(fresh){
     V=j.videos||[]; RATE=j.rates||{}; CREATORS=j.creators||[]; LEAD_DAYS=j.leadDays||12;
     document.getElementById('lead').textContent=LEAD_DAYS;
     document.getElementById('hsub').textContent=
-      'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · synced '+
+      'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · '+
+      V.filter(stale).length+' stuck past their post date · synced '+
       new Date(j.syncedAt).toLocaleTimeString('en-GB');
     showBanner((j.problems&&j.problems.length)?('Some boards did not load — '+j.problems.join(' · ')):'');
     render();
@@ -203,7 +212,9 @@ function render(){
 
   var tb=0,tr=0,rec=0;
   CREATORS.forEach(function(c){tb+=banked(c);tr+=rateOf(c);rec+=(chosen[c]!==undefined?chosen[c]:recFor(c))});
-  var risk=V.filter(function(v){var d=dueOf(v);return v.stage<5&&d&&d<=TODAY})
+  var floor=addD(TODAY,-30);
+  var risk=V.filter(function(v){var d=dueOf(v),p=pdate(v);
+    return v.stage<5&&d&&d<=TODAY&&p&&p>=floor})
     .sort(function(a,b){return pdate(a)-pdate(b)});
 
   document.getElementById('k1').textContent=tb;
@@ -236,7 +247,9 @@ function render(){
       '<div style="padding:13px 16px 15px">'+
         '<div class="between" style="align-items:flex-end">'+
           '<div><div style="font-size:26px;font-weight:600;line-height:1">'+b+'</div>'+
-          '<div class="sub">banked · '+f+' still in scripting</div></div>'+
+          '<div class="sub">banked · '+f+' still in scripting'+
+            (staleOf(c)?' · <span style="color:var(--amber)">'+staleOf(c)+' stuck past date</span>':'')+
+          '</div></div>'+
           '<div class="pick" data-c="'+esc(c)+'">'+opts.map(function(o){
             return '<button data-v="'+o+'" class="'+(o===r?'rec ':'')+(o===pickVal?'sel':'')+'">'+o+'</button>'}).join('')+
           '</div>'+
@@ -298,43 +311,39 @@ function renderCal(){
       :'<div class="empty">Clear day.</div>');
 }
 
-// --- writing the plan back to Notion -------------------------------------
-// api/add-video.js already appends a checkbox into a week's creator section.
-// Confirm its expected body and adjust this one object if it differs.
-function addVideoBody(weekStart, creator, n){
-  return { week: weekStart, creator: creator, title: 'Script slot ' + n };
+// --- the plan ------------------------------------------------------------
+// No Notion write yet: this copies the plan as markdown checkboxes so it can
+// be pasted straight into the weekly page. Notion turns "- [ ] x" into a
+// real to-do block on paste.
+function planLines(){
+  var out=[];
+  CREATORS.forEach(function(c){
+    var n=(chosen[c]!==undefined?chosen[c]:recFor(c));
+    if(!n) return;
+    out.push(c);
+    for(var i=1;i<=n;i++) out.push('- [ ] ');
+    out.push('');
+  });
+  return out;
 }
 
 document.getElementById('save').onclick=async function(){
-  if(saving) return;
-  var plan=CREATORS.map(function(c){return {c:c,n:(chosen[c]!==undefined?chosen[c]:recFor(c))}})
-    .filter(function(x){return x.n>0});
-  var total=plan.reduce(function(a,x){return a+x.n},0);
-  if(!total){document.getElementById('savenote').textContent='nothing to write';return}
-  var msg='Write '+total+' script slots into the week of '+dmy(nextWeek)+'?\n\n'+
-    plan.map(function(x){return x.c+': '+x.n}).join('\n');
-  if(!confirm(msg)) return;
-
-  saving=true; this.disabled=true;
-  var note=document.getElementById('savenote'); note.textContent='writing…';
-  var wk=nextWeek.toISOString().slice(0,10), done=0, failed=[];
-  for(const p of plan){
-    for(let i=1;i<=p.n;i++){
-      try{
-        const r=await fetch('/api/add-video',{method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(addVideoBody(wk,p.c,i))});
-        if(!r.ok) throw new Error(r.status);
-        done++;
-      }catch(e){ failed.push(p.c+' #'+i) }
-      note.textContent='writing… '+done+'/'+total;
-    }
+  var lines=planLines();
+  var note=document.getElementById('savenote');
+  if(!lines.length){ note.textContent='nothing to copy'; return }
+  var total=lines.filter(function(l){return l.indexOf('- [ ]')===0}).length;
+  var text='Week of '+dmy(nextWeek)+'\n\n'+lines.join('\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    note.textContent=total+' slots copied — paste into the week of '+dmy(nextWeek);
+  }catch(e){
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); note.textContent=total+' slots copied'; }
+    catch(e2){ note.textContent='could not copy — check clipboard permissions'; }
+    document.body.removeChild(ta);
   }
-  note.textContent = failed.length
-    ? done+' written, '+failed.length+' failed ('+failed.slice(0,3).join(', ')+')'
-    : done+' slots written into the week of '+dmy(nextWeek);
-  saving=false; this.disabled=false;
-  load(true);
 };
 
 document.getElementById('buf').oninput=function(){buffer=+this.value;chosen={};render()};
