@@ -109,7 +109,7 @@ h1{font-size:23px;font-weight:600;margin:0}
 <div class="banner" id="banner"></div>
 
 <div class="kpis">
-  <div class="kpi"><div class="lab">Posting this week</div><div class="val" id="k1">—</div></div>
+  <div class="kpi"><div class="lab" id="k1lab">Left this week</div><div class="val" id="k1">—</div></div>
   <div class="kpi"><div class="lab">Posting next week</div><div class="val" id="k2">—</div></div>
   <div class="kpi"><div class="lab">To write next week</div><div class="val" id="k3" style="color:var(--blue)">—</div></div>
   <div class="kpi risk"><div class="lab">Locked dates, no script</div><div class="val" id="k4" style="color:var(--red)">—</div></div>
@@ -199,8 +199,20 @@ function label(s){return STAGES[s]||('stage '+s)}
 var thisWeek=mondayOf(TODAY);
 
 function stale(v){var p=pdate(v);return v.stage<12&&p&&p<TODAY}
-function inWeek(v,w){var p=pdate(v);return p&&p>=w&&p<addD(w,7)}
-function slots(c,w){return V.filter(function(v){return v.creator===c&&inWeek(v,w)})}
+// This week only counts from today forward — on a Saturday the first five
+// days are already posted and would read as a plan when they are history.
+var restFrom = TODAY, restTo = addD(mondayOf(TODAY),7);
+var restDays = Math.max(0,Math.round((restTo-restFrom)/864e5));
+function slotsRange(c,from,to){return V.filter(function(v){
+  var p=pdate(v);return v.creator===c&&p&&p>=from&&p<to})}
+function slots(c,w){return w===thisWeek?slotsRange(c,restFrom,restTo)
+  :slotsRange(c,w,addD(w,7))}
+function span(a,b){
+  var e=addD(b,-1);
+  return a.getMonth()===e.getMonth()
+    ? a.getDate()+'–'+e.getDate()+' '+e.toLocaleDateString('en-GB',{month:'short'})
+    : dmy(a)+' – '+dmy(e);
+}
 function scripted(list){return list.filter(function(v){return v.stage>=5}).length}
 // Script that exists but isn't holding a slot — written, not scheduled.
 function undated(c){return V.filter(function(v){
@@ -259,6 +271,8 @@ function render(){
     return v.stage<5&&d&&d<=TODAY&&p&&p>=floor})
     .sort(function(a,b){return pdate(a)-pdate(b)});
 
+  document.getElementById('k1lab').textContent=
+    (restDays>1?'Left this week':'Posting today')+' · '+span(restFrom,restTo);
   document.getElementById('k1').textContent=tw;
   document.getElementById('k2').textContent=nw;
   document.getElementById('k3').textContent=rec;
@@ -280,13 +294,13 @@ function render(){
     var opts=[Math.max(0,r-1),r,r+1,r+2].filter(function(x,i,a){return a.indexOf(x)===i});
     var u=undated(c), st=staleOf(c);
 
-    function weekLine(lab,w){
+    function weekLine(lab,w,range){
       var list=slots(c,w), done=scripted(list), miss=list.length-done;
       var pct=list.length?Math.round(done/list.length*100):0;
       var col=miss===0?'var(--green)':(done?'var(--amber)':'var(--red)');
       return '<div style="margin-bottom:11px">'+
         '<div class="between" style="gap:8px">'+
-          '<span class="sub">'+lab+'</span>'+
+          '<span class="sub">'+lab+' <span style="color:var(--tx3)">'+range+'</span></span>'+
           '<span style="font-size:13px">'+
             (list.length
               ? '<b>'+list.length+'</b><span class="who"> posting · </span>'+
@@ -310,8 +324,8 @@ function render(){
     return '<div class="card" style="overflow:hidden">'+
       '<div class="chd"><span class="name">'+esc(c)+'</span><span class="sub">posts '+rateOf(c)+'/wk</span></div>'+
       '<div style="padding:14px 16px 15px">'+
-        weekLine('This week',thisWeek)+
-        weekLine('Next week',nextWeek)+
+        weekLine(restDays>1?'Rest of this week':'Today',thisWeek,span(restFrom,restTo))+
+        weekLine('Next week',nextWeek,span(nextWeek,addD(nextWeek,7)))+
         '<div class="pick" data-c="'+esc(c)+'" style="margin:13px 0 10px">'+opts.map(function(o){
           return '<button data-v="'+o+'" class="'+(o===r?'rec ':'')+(o===pickVal?'sel':'')+'">'+o+'</button>'
         }).join('')+'</div>'+
