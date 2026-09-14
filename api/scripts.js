@@ -135,6 +135,8 @@ function measureRates(videos, roster) {
   const windowMs = 28 * 864e5;
   const counts = {};
   for (const v of videos) {
+    // Sponsor dates move around, so they don't set the cadence.
+    if (v.kind === 'Sponsor') continue;
     if (v.stage !== 12 || !v.postDate) continue;
     const t = new Date(v.postDate).getTime();
     if (isNaN(t) || t > now || now - t > windowMs) continue;
