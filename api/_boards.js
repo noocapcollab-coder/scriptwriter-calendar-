@@ -47,10 +47,17 @@ export function parseExtra(raw) {
 export function rosterFor(query) {
   const hidden = String(query.hide || '').split(',').map(x => x.trim()).filter(Boolean);
   const extra = parseExtra(query.extra);
-  const seen = new Set();
+  const seenDs = new Set();
+  const seenName = new Set();
+  // Built-in entries come first, so a hand-added duplicate of the same creator
+  // loses rather than appearing twice.
   return BOARDS.concat(extra)
     .filter(b => !hidden.includes(b.creator))
-    .filter(b => { if (seen.has(b.ds)) return false; seen.add(b.ds); return true; });
+    .filter(b => {
+      const name = b.creator.trim().toLowerCase();
+      if (seenDs.has(b.ds) || seenName.has(name)) return false;
+      seenDs.add(b.ds); seenName.add(name); return true;
+    });
 }
 
 
@@ -80,6 +87,14 @@ export async function resolveDs(id) {
 
   // Otherwise treat it as a dashboard page and look inside for a board,
   // preferring one whose title mentions REELS.
+  const probe = await fetch(`${NOTION}/blocks/${id}/children?page_size=1`, { headers: headers() });
+  if (!probe.ok) {
+    throw new Error(probe.status === 404
+      ? 'the integration cannot see that page or board — open it in Notion, ' +
+        'then ••• → Connections → add the NOOCAP Ops Dashboard integration'
+      : `could not read that page (${probe.status})`);
+  }
+
   const inside = await databaseInsidePage(id);
   if (inside) {
     const resolved = await resolveDs(inside);
@@ -87,9 +102,8 @@ export async function resolveDs(id) {
     return resolved;
   }
 
-  throw new Error('no board found at that id — if it is a dashboard page, check the ' +
-    'integration is connected to it; if it is a board, use the source rather than a ' +
-    'linked "View of…" copy');
+  throw new Error('that page opened fine but has no board on it that the integration ' +
+    'can see — link the REELS board directly instead');
 }
 
 // Walk a page's blocks a couple of levels deep (boards often sit inside
