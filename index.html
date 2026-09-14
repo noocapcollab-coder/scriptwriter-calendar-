@@ -51,6 +51,8 @@ h1{font-size:23px;font-weight:600;margin:0}
 .k{font-size:10.5px;padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:.02em}
 .k-s{background:var(--bluebg);color:#93aaff}
 .k-p{background:#1a1f2c;color:var(--tx2)}
+.k-l{background:rgba(167,139,250,.15);color:#b9a5fb}
+.k-sh{background:#1a1f2c;color:var(--tx2)}
 .day.past{opacity:.5}
 .day.today{border-color:var(--blue)}
 .chd{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -80,6 +82,7 @@ h1{font-size:23px;font-weight:600;margin:0}
 .rrow:first-of-type{border-top:0}
 .x{border:0;background:transparent;color:var(--tx3);font-size:16px;padding:0 6px;cursor:pointer}
 .x:hover{color:var(--red)}
+input[type=range]{accent-color:#6d8cff;width:104px}
 .field{background:#0b0e16;border:1px solid var(--line);border-radius:7px;color:var(--tx);
   padding:7px 11px;font:inherit;font-size:13px}
 .field:focus{outline:none;border-color:var(--blue)}
@@ -99,6 +102,9 @@ h1{font-size:23px;font-weight:600;margin:0}
     <div class="sub" id="hsub">loading boards…</div>
   </div>
   <div class="row">
+    <span class="sub">hold</span>
+    <input type="range" id="cush" min="1" max="4" step="0.5" value="2">
+    <span style="font-weight:500;min-width:74px" id="cushlab">2 weeks</span>
     <button id="rosterbtn">Creators</button>
     <button id="reload">Reload</button>
   </div>
@@ -111,7 +117,7 @@ h1{font-size:23px;font-weight:600;margin:0}
 <div class="kpis">
   <div class="kpi"><div class="lab" id="k1lab">Left this week</div><div class="val" id="k1">—</div></div>
   <div class="kpi"><div class="lab">Posting next week</div><div class="val" id="k2">—</div></div>
-  <div class="kpi"><div class="lab">Unscripted ahead</div><div class="val" id="k3" style="color:var(--blue)">—</div></div>
+  <div class="kpi"><div class="lab">To write this week</div><div class="val" id="k3" style="color:var(--blue)">—</div></div>
   <div class="kpi risk"><div class="lab">Locked dates, no script</div><div class="val" id="k4" style="color:var(--red)">—</div></div>
 </div>
 
@@ -162,7 +168,8 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 
 var V=[], RATE={}, CREATORS=[];
 var calMode='post', who='all', saving=false;
-var BUILTIN=[];
+var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||2;
+var BUILTIN=[], FORMATS={};
 
 function readLS(k,fb){try{var v=JSON.parse(localStorage.getItem(k));return v||fb}catch(e){return fb}}
 function writeLS(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -171,7 +178,8 @@ var HIDDEN=readLS('noocap_scripts_hidden',[]);
 
 function rosterQS(){
   var q=[];
-  if(EXTRA.length) q.push('extra='+encodeURIComponent(EXTRA.map(function(x){return x.creator+':'+x.ds}).join(',')));
+  if(EXTRA.length) q.push('extra='+encodeURIComponent(EXTRA.map(function(x){
+    return x.creator+':'+x.ds+':'+(x.format||'Short')}).join(',')));
   if(HIDDEN.length) q.push('hide='+encodeURIComponent(HIDDEN.join(',')));
   return q.join('&');
 }
@@ -212,12 +220,23 @@ function onDates(dates){
     .sort(function(a,b){return pdate(a)-pdate(b)});
 }
 function bankOf(c){return V.filter(function(v){return v.creator===c&&v.stage===1}).length}
+
+// Script in hand: written, not yet posted, and not stuck behind a date that
+// already passed. Undated scripts count — they are real work already done.
+function inHand(c){return V.filter(function(v){
+  var p=pdate(v);
+  return v.creator===c&&v.stage>=5&&v.stage<12&&(!p||p>=TODAY)}).length}
+function coversWeeks(c){return inHand(c)/rateOf(c)}
+// Hold the cushion: write enough to get back up to it, nothing if already there.
+function needFor(c){return Math.max(0,Math.round(rateOf(c)*cushion-inHand(c)))}
 function tone(s){return s>=12?'n':(s>=5?'g':(s>=3?'a':'r'))}
 function toneHex(s){return s>=12?'#3a4152':(s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)'))}
 function label(s){return STAGES[s]||('stage '+s)}
 function kindChip(v){
-  if(!v.kind) return '';
-  return '<span class="k '+(v.kind==='Sponsor'?'k-s':'k-p')+'">'+esc(v.kind)+'</span>';
+  var out='';
+  if(v.format) out+='<span class="k '+(v.format==='Long'?'k-l':'k-sh')+'">'+esc(v.format)+'</span>';
+  if(v.kind) out+='<span class="k '+(v.kind==='Sponsor'?'k-s':'k-p')+'">'+esc(v.kind)+'</span>';
+  return out;
 }
 
 // A video only counts as banked stock if it has not gone out yet. Anything
@@ -263,7 +282,7 @@ async function load(fresh){
     var j=await r.json();
     if(j.error) throw new Error(j.error);
     V=j.videos||[]; RATE=j.rates||{}; CREATORS=j.creators||[];
-    BUILTIN=j.builtIn||[];
+    BUILTIN=j.builtIn||[]; FORMATS=j.formats||{};
     renderRoster();
     document.getElementById('hsub').textContent=
       'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · '+
@@ -326,11 +345,14 @@ function renderSession(){
 }
 
 function render(){
+  document.getElementById('cush').value=cushion;
+  document.getElementById('cushlab').textContent=cushion+' week'+(cushion==1?'':'s');
+
   var tw=0,nw=0;
   CREATORS.forEach(function(c){
     tw+=slots(c,thisWeek).length; nw+=slots(c,nextWeek).length;
   });
-  var ahead=V.filter(function(v){return v.stage<5&&pdate(v)&&pdate(v)>=TODAY}).length;
+  var ahead=0; CREATORS.forEach(function(c){ahead+=needFor(c)});
   var floor=addD(TODAY,-30);
   var risk=V.filter(function(v){var d=dueOf(v),p=pdate(v);
     return v.stage<5&&d&&d<=TODAY&&p&&p>=floor})
@@ -355,36 +377,47 @@ function render(){
     : '<div class="empty">Nothing has blown its script deadline.</div>';
 
   document.getElementById('dec').innerHTML=CREATORS.map(function(c){
+    var need=needFor(c), hand=inHand(c), wk=coversWeeks(c), bank=bankOf(c);
+    var until=addD(TODAY,Math.round(wk*7));
     var open=V.filter(function(v){
       return v.creator===c&&v.stage<5&&pdate(v)&&pdate(v)>=TODAY})
       .sort(function(a,b){return dueOf(a)-dueOf(b)});
-    var bank=bankOf(c);
 
-    var rows=open.length
-      ? open.map(function(v){
-          var due=dueOf(v), late=due<TODAY;
-          return '<div class="crow" style="padding:8px 0">'+
-            '<a class="vt" style="font-size:13px" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
-            esc(v.title)+'</a>'+
-            '<span style="white-space:nowrap">'+kindChip(v)+
-              '<span class="chip c-'+(late?'r':tone(v.stage))+'">'+
-              shortDay(pdate(v))+' · due '+shortDay(due)+'</span></span>'+
-          '</div>';
-        }).join('')
-      : '<div class="sub" style="padding:8px 0">Everything dated has a script.</div>';
+    var dated=open.length?'<div style="border-top:1px solid var(--line);margin-top:11px;padding-top:9px">'+
+      '<div class="sub" style="margin-bottom:4px">Dated but not scripted</div>'+
+      open.map(function(v){
+        var due=dueOf(v), late=due<TODAY;
+        return '<div class="between" style="gap:8px;padding:3px 0">'+
+          '<a class="vt" style="font-size:12.5px" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
+          esc(v.title)+'</a>'+
+          '<span style="white-space:nowrap">'+kindChip(v)+
+          '<span class="chip c-'+(late?'r':'a')+'">due '+shortDay(due)+'</span></span></div>';
+      }).join('')+'</div>':'';
 
     return '<div class="card" style="overflow:hidden">'+
-      '<div class="chd"><span class="name">'+esc(c)+'</span><span class="sub">posts '+rateOf(c)+'/wk</span></div>'+
-      '<div style="padding:12px 16px 14px">'+
-        '<div class="between">'+
-          '<span class="sub">Needs a script</span>'+
-          '<span style="font-size:20px;font-weight:600;color:'+
-            (open.length?'var(--amber)':'var(--green)')+'">'+open.length+'</span>'+
+      '<div class="chd"><span class="name">'+esc(c)+
+        '<span class="k '+((FORMATS[c]||'Short')==='Long'?'k-l':'k-sh')+'" style="margin-left:9px">'+
+        esc(FORMATS[c]||'Short')+'</span></span>'+
+        '<span class="sub">posts '+rateOf(c)+'/wk</span></div>'+
+      '<div style="padding:13px 16px 14px">'+
+        '<div class="between" style="align-items:flex-end">'+
+          '<div>'+
+            '<div style="font-size:30px;font-weight:600;line-height:1;color:'+
+              (need?'var(--amber)':'var(--green)')+'">'+need+'</div>'+
+            '<div class="sub">to write this week</div>'+
+          '</div>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:15px;font-weight:500">'+hand+' in hand</div>'+
+            '<div class="sub">'+(hand?'covers '+wk.toFixed(1)+' wks, to '+dmy(until):'nothing written')+'</div>'+
+          '</div>'+
         '</div>'+
-        rows+
-        '<div class="between" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">'+
+        '<div class="meter" style="margin:12px 0 0"><i style="width:'+
+          Math.min(100,Math.round(wk/cushion*100))+'%;background:'+
+          (need?'var(--amber)':'var(--green)')+'"></i></div>'+
+        dated+
+        '<div class="between" style="border-top:1px solid var(--line);margin-top:10px;padding-top:9px">'+
           '<span class="sub">Topic bank</span>'+
-          '<span style="font-size:15px;font-weight:500;color:'+
+          '<span style="font-size:14px;font-weight:500;color:'+
             (bank?(bank<3?'var(--amber)':'var(--green)'):'var(--red)')+'">'+bank+'</span>'+
         '</div>'+
       '</div></div>';
@@ -456,9 +489,9 @@ function normId(raw){
 function renderRoster(){
   var box=document.getElementById('roster');
   var rows=BUILTIN.map(function(c){
-    return {name:c,kind:'built in',hidden:HIDDEN.indexOf(c)>=0};
+    return {name:c,kind:(FORMATS[c]||'Short')+' form · built in',hidden:HIDDEN.indexOf(c)>=0};
   }).concat(EXTRA.map(function(x){
-    return {name:x.creator,kind:'added here',hidden:false,ds:x.ds};
+    return {name:x.creator,kind:(x.format||'Short')+' form · added here',hidden:false,ds:x.ds};
   }));
 
   box.innerHTML =
@@ -472,7 +505,8 @@ function renderRoster(){
     '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px">'+
       '<div class="row" style="flex-wrap:wrap">'+
         '<input class="field" id="nname" placeholder="Creator name" style="width:170px">'+
-        '<input class="field" id="nds" placeholder="Source data source ID" style="flex:1;min-width:250px">'+
+        '<input class="field" id="nds" placeholder="Source data source ID" style="flex:1;min-width:230px">'+
+        '<button id="nfmt" data-f="Short">Short</button>'+
         '<button id="nadd">Add</button>'+
       '</div>'+
       '<div class="err" id="nerr"></div>'+
@@ -495,7 +529,11 @@ function renderRoster(){
   });
 
   var nameEl=document.getElementById('nname'), dsEl=document.getElementById('nds'),
-      errEl=document.getElementById('nerr');
+      errEl=document.getElementById('nerr'), fmtEl=document.getElementById('nfmt');
+  fmtEl.onclick=function(){
+    var f=this.dataset.f==='Short'?'Long':'Short';
+    this.dataset.f=f; this.textContent=f;
+  };
   function clearErr(){errEl.textContent=''}
   nameEl.oninput=clearErr; dsEl.oninput=clearErr;
 
@@ -506,7 +544,7 @@ function renderRoster(){
     if(BUILTIN.indexOf(name)>=0||EXTRA.some(function(x){return x.creator===name})){
       errEl.textContent=name+' is already on the list'; return }
     if(EXTRA.some(function(x){return x.ds===ds})){ errEl.textContent='That board is already added'; return }
-    EXTRA.push({creator:name,ds:ds}); writeLS('noocap_scripts_extra',EXTRA);
+    EXTRA.push({creator:name,ds:ds,format:fmtEl.dataset.f}); writeLS('noocap_scripts_extra',EXTRA);
     nameEl.value=''; dsEl.value=''; errEl.textContent='';
     load(true);
   };
@@ -535,6 +573,12 @@ document.getElementById('hkbtn').onclick=function(){
   var open=box.style.display!=='none';
   box.style.display=open?'none':'block';
   this.classList.toggle('on',!open);
+};
+
+document.getElementById('cush').oninput=function(){
+  cushion=+this.value;
+  try{localStorage.setItem('noocap_scripts_cushion',cushion)}catch(e){}
+  render();
 };
 
 document.getElementById('rosterbtn').onclick=function(){
