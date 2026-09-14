@@ -86,6 +86,7 @@ input[type=range]{accent-color:#6d8cff;width:104px}
 .field{background:#0b0e16;border:1px solid var(--line);border-radius:7px;color:var(--tx);
   padding:7px 11px;font:inherit;font-size:13px}
 .field:focus{outline:none;border-color:var(--blue)}
+select.field{cursor:pointer}
 .err{color:var(--red);font-size:12.5px;min-height:18px}
 .banner{border:1px solid rgba(241,107,107,.4);background:var(--redbg);color:var(--red);
   border-radius:11px;padding:13px 16px;font-size:13px;margin-bottom:16px;display:none}
@@ -103,8 +104,8 @@ input[type=range]{accent-color:#6d8cff;width:104px}
   </div>
   <div class="row">
     <span class="sub">hold</span>
-    <input type="range" id="cush" min="1" max="4" step="0.5" value="2">
-    <span style="font-weight:500;min-width:74px" id="cushlab">2 weeks</span>
+    <input type="range" id="cush" min="1" max="4" step="0.5" value="1">
+    <span style="font-weight:500;min-width:74px" id="cushlab">1 week</span>
     <button id="rosterbtn">Creators</button>
     <button id="reload">Reload</button>
   </div>
@@ -167,7 +168,7 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 
 var V=[], RATE={}, CREATORS=[];
 var calMode='post', who='all', saving=false;
-var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||2;
+var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||1;
 var BUILTIN=[], FORMATS={};
 
 function readLS(k,fb){try{var v=JSON.parse(localStorage.getItem(k));return v||fb}catch(e){return fb}}
@@ -465,6 +466,17 @@ function renderCal(){
 
   var sel=onDay(selDay),lab=calMode==='due'?'script due':'posting';
   var back=selDay<TODAY?' <span class="sub">· in the past</span>':'';
+  var addForm='<div style="border-top:1px solid var(--line);padding:11px 16px 13px">'+
+    '<div class="row" style="flex-wrap:wrap;gap:7px">'+
+      '<select class="field" id="tcre">'+CREATORS.map(function(c){
+        return '<option'+(who===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'+
+      '<input class="field" id="ttitle" placeholder="Topic title" style="flex:1;min-width:210px">'+
+      '<button id="ttype" data-f="Personal">Personal</button>'+
+      '<button id="tadd" style="border-color:#33507f;color:var(--tx)">Add to '+dmy(selDay)+'</button>'+
+    '</div>'+
+    '<div class="err" id="terr"></div>'+
+    '<div class="sub">Creates a card at stage 1 on that creator\'s board, dated '+dmy(selDay)+'.</div>'+
+  '</div>';
   document.getElementById('daypanel').innerHTML=
     '<div class="chd"><span class="name">'+fmt(selDay)+back+'</span><span class="sub">'+
     (sel.length?sel.length+' '+lab+' · '+sel.filter(function(v){return v.kind==='Sponsor'}).length+
@@ -476,7 +488,38 @@ function renderCal(){
       '<span style="white-space:nowrap">'+kindChip(v)+
       '<span class="chip c-'+tone(v.stage)+'">'+v.stage+' · '+esc(label(v.stage))+
       (calMode==='due'&&pdate(v)?' · posts '+dmy(pdate(v)):'')+'</span></span></div>'}).join('')
-      :'<div class="empty">Clear day.</div>');
+      :'<div class="empty">Nothing on this day yet.</div>')+addForm;
+
+  var cre=document.getElementById('tcre'), tit=document.getElementById('ttitle'),
+      typ=document.getElementById('ttype'), add=document.getElementById('tadd'),
+      err=document.getElementById('terr');
+  tit.oninput=function(){err.textContent=''};
+  typ.onclick=function(){
+    var f=this.dataset.f==='Personal'?'Sponsor':'Personal';
+    this.dataset.f=f; this.textContent=f;
+  };
+  tit.onkeydown=function(e){if(e.key==='Enter') add.click()};
+  add.onclick=async function(){
+    var t=tit.value.trim();
+    if(!t){err.textContent='Give the topic a title first'; tit.focus(); return}
+    if(!confirm('Add "'+t+'" to '+cre.value+' on '+dmy(selDay)+'?')) return;
+    add.disabled=true; err.textContent=''; add.textContent='Adding…';
+    try{
+      var q=rosterQS();
+      var r=await fetch('/api/add-topic'+(q?'?'+q:''),{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({creator:cre.value,title:t,type:typ.dataset.f,
+          date:selDay.getFullYear()+'-'+String(selDay.getMonth()+1).padStart(2,'0')+'-'+
+               String(selDay.getDate()).padStart(2,'0')})});
+      var j=await r.json();
+      if(!r.ok) throw new Error(j.error||('failed with '+r.status));
+      tit.value='';
+      load(true);
+    }catch(e){
+      err.textContent=e.message;
+      add.disabled=false; add.textContent='Add to '+dmy(selDay);
+    }
+  };
 }
 
 function normId(raw){
