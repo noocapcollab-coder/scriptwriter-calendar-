@@ -90,21 +90,34 @@ function findPostDate(props) {
   return fallback;
 }
 
-// The Sponsor / Personal tag. Property names differ per board, so match on
-// the value rather than the column name.
-function findKind(props) {
+// Every select / multi-select value on the card. Property names differ per
+// board, so tags get matched by value rather than by column name.
+function tagsOf(props) {
+  const out = [];
   for (const k in props) {
     const p = props[k];
     if (!p) continue;
-    let vals = [];
-    if (p.type === 'select' && p.select) vals = [p.select.name];
-    else if (p.type === 'multi_select' && Array.isArray(p.multi_select)) vals = p.multi_select.map(x => x.name);
-    else continue;
-    for (const v of vals) {
-      if (!v) continue;
-      if (/sponsor/i.test(v)) return 'Sponsor';
-      if (/personal/i.test(v)) return 'Personal';
-    }
+    if (p.type === 'select' && p.select && p.select.name) out.push(p.select.name);
+    else if (p.type === 'multi_select' && Array.isArray(p.multi_select))
+      for (const x of p.multi_select) if (x && x.name) out.push(x.name);
+  }
+  return out;
+}
+
+function findKind(tags) {
+  for (const v of tags) {
+    if (/sponsor/i.test(v)) return 'Sponsor';
+    if (/personal/i.test(v)) return 'Personal';
+  }
+  return null;
+}
+
+// Short vs long form. Widen these patterns if a board uses different wording —
+// hit /api/scripts and look at the tagVocab list to see what is actually there.
+function findFormat(tags) {
+  for (const v of tags) {
+    if (/\b(long[\s-]?form|long|youtube|yt|podcast)\b/i.test(v)) return 'Long';
+    if (/\b(short[\s-]?form|shorts?|reels?|tiktok)\b/i.test(v)) return 'Short';
   }
   return null;
 }
@@ -148,13 +161,16 @@ async function queryBoard(board) {
       if (stage === null || stage === 'archive') continue;
       const title = titleOf(props);
       if (!title) continue;
+      const tags = tagsOf(props);
       out.push({
         id: page.id,
         creator: board.creator,
         title,
         stage,
         stageLabel: label,
-        kind: findKind(props),
+        kind: findKind(tags),
+        format: findFormat(tags),
+        tags,
         postDate: findPostDate(props)
       });
     }
@@ -207,8 +223,12 @@ export default async function handler(req, res) {
     for (const c of chunks) {
       if (c && c.__err) problems.push(c.__err); else videos.push(...c);
     }
+    const vocab = {};
+    for (const v of videos) for (const t of (v.tags || [])) vocab[t] = (vocab[t] || 0) + 1;
+
     const payload = {
       videos,
+      tagVocab: Object.entries(vocab).sort((a, b) => b[1] - a[1]).slice(0, 60),
       rates: measureRates(videos, roster),
       leadDays: LEAD_DAYS,
       creators: roster.map(b => b.creator),
