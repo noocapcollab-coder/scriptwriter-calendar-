@@ -68,16 +68,18 @@ export async function resolveDs(id) {
   const direct = await fetch(`${NOTION}/data_sources/${id}`, { headers: headers() });
   if (direct.ok) { dsCache.set(id, id); return id; }
 
+  // Might be a database id. Only take it if it actually names a data source —
+  // a page id can come back 200 here with nothing useful on it, so a miss
+  // falls through to the page walk rather than giving up.
   const asDb = await fetch(`${NOTION}/databases/${id}`, { headers: headers() });
   if (asDb.ok) {
-    const j = await asDb.json();
+    const j = await asDb.json().catch(() => ({}));
     const first = (j.data_sources || [])[0];
     if (first && first.id) { dsCache.set(id, first.id); return first.id; }
-    throw new Error('that database has no data source the integration can see');
   }
 
-  // Could be a dashboard page rather than a database. Look inside it for a
-  // board, preferring one whose title mentions REELS.
+  // Otherwise treat it as a dashboard page and look inside for a board,
+  // preferring one whose title mentions REELS.
   const inside = await databaseInsidePage(id);
   if (inside) {
     const resolved = await resolveDs(inside);
@@ -85,11 +87,9 @@ export async function resolveDs(id) {
     return resolved;
   }
 
-  if (asDb.status === 404) {
-    throw new Error('not found — check the integration is shared with that board, ' +
-      'and that the id is the source board rather than a linked "View of…" copy');
-  }
-  throw new Error(`could not resolve that id (${asDb.status})`);
+  throw new Error('no board found at that id — if it is a dashboard page, check the ' +
+    'integration is connected to it; if it is a board, use the source rather than a ' +
+    'linked "View of…" copy');
 }
 
 // Walk a page's blocks a couple of levels deep (boards often sit inside
