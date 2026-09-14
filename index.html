@@ -145,7 +145,6 @@ input[type=range]{accent-color:#6d8cff;width:104px}
     <span><span class="dot" style="background:var(--green);display:inline-block;margin-right:7px"></span>script approved</span>
     <span><span class="dot" style="background:var(--amber);display:inline-block;margin-right:7px"></span>in scripting</span>
     <span><span class="dot" style="background:var(--red);display:inline-block;margin-right:7px"></span>not started</span>
-    <span><span class="dot" style="background:#3a4152;display:inline-block;margin-right:7px"></span>already posted</span>
     <span id="duenote" style="display:none">Mon&ndash;Wed posts are due Friday, Thu&ndash;Sat posts are due Wednesday</span>
   </div>
   <div class="filters" id="filters"></div>
@@ -221,16 +220,15 @@ function onDates(dates){
 }
 function bankOf(c){return V.filter(function(v){return v.creator===c&&v.stage===1}).length}
 
-// Script in hand: written, not yet posted, and not stuck behind a date that
-// already passed. Undated scripts count — they are real work already done.
+// Script done and still in production — approval, to film or in edit.
 function inHand(c){return V.filter(function(v){
   var p=pdate(v);
-  return v.creator===c&&v.stage>=5&&v.stage<12&&(!p||p>=TODAY)}).length}
+  return v.creator===c&&v.stage>=5&&(!p||p>=TODAY)}).length}
 function coversWeeks(c){return inHand(c)/rateOf(c)}
 // Hold the cushion: write enough to get back up to it, nothing if already there.
 function needFor(c){return Math.max(0,Math.round(rateOf(c)*cushion-inHand(c)))}
-function tone(s){return s>=12?'n':(s>=5?'g':(s>=3?'a':'r'))}
-function toneHex(s){return s>=12?'#3a4152':(s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)'))}
+function tone(s){return s>=5?'g':(s>=3?'a':'r')}
+function toneHex(s){return s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)')}
 function label(s){return STAGES[s]||('stage '+s)}
 function kindChip(v){
   var out='';
@@ -244,7 +242,7 @@ function kindChip(v){
 // not inventory, so it is counted separately as stale.
 var thisWeek=mondayOf(TODAY);
 
-function stale(v){var p=pdate(v);return v.stage<12&&p&&p<TODAY}
+function stale(v){var p=pdate(v);return !!p&&p<TODAY}
 // This week only counts from today forward — on a Saturday the first five
 // days are already posted and would read as a plan when they are history.
 var restFrom = TODAY, restTo = addD(mondayOf(TODAY),7);
@@ -262,7 +260,7 @@ function span(a,b){
 function scripted(list){return list.filter(function(v){return v.stage>=5}).length}
 // Script that exists but isn't holding a slot — written, not scheduled.
 function undated(c){return V.filter(function(v){
-  return v.creator===c&&v.stage>=5&&v.stage<12&&!pdate(v)}).length}
+  return v.creator===c&&v.stage>=5&&!pdate(v)}).length}
 function staleOf(c){return V.filter(function(v){return v.creator===c&&stale(v)}).length}
 
 function rateOf(c){return RATE[c]||1}
@@ -281,7 +279,10 @@ async function load(fresh){
     if(!r.ok) throw new Error('api returned '+r.status);
     var j=await r.json();
     if(j.error) throw new Error(j.error);
-    V=j.videos||[]; RATE=j.rates||{}; CREATORS=j.creators||[];
+    // Only the live pipeline: idea assigned (1) through in edit (7).
+    // Changes, approval, to post, ready, posted and repost are out of scope.
+    V=(j.videos||[]).filter(function(v){return v.stage>=1&&v.stage<=7});
+    RATE=j.rates||{}; CREATORS=j.creators||[];
     BUILTIN=j.builtIn||[]; FORMATS=j.formats||{};
     renderRoster();
     document.getElementById('hsub').textContent=
@@ -407,8 +408,8 @@ function render(){
             '<div class="sub">to write this week</div>'+
           '</div>'+
           '<div style="text-align:right">'+
-            '<div style="font-size:15px;font-weight:500">'+hand+' in hand</div>'+
-            '<div class="sub">'+(hand?'covers '+wk.toFixed(1)+' wks, to '+dmy(until):'nothing written')+'</div>'+
+            '<div style="font-size:15px;font-weight:500">'+hand+' ahead</div>'+
+            '<div class="sub">'+(hand?'scripted, in production · '+wk.toFixed(1)+' wks':'nothing scripted ahead')+'</div>'+
           '</div>'+
         '</div>'+
         '<div class="meter" style="margin:12px 0 0"><i style="width:'+
