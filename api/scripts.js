@@ -7,7 +7,7 @@
 // 'select', and the post date from the first date property whose name
 // mentions "post" (falling back to any date property).
 
-import { NOTION, BOARDS, headers, rosterFor } from './_boards.js';
+import { NOTION, BOARDS, headers, rosterFor, resolveDs } from './_boards.js';
 
 // Leave a creator out to measure their rate from the last 4 weeks of posts.
 // Put a number here to pin it instead (contracted output, new creator, etc).
@@ -88,16 +88,18 @@ function stageOf(label) {
 
 async function queryBoard(board) {
   const out = [];
+  const ds = await resolveDs(board.ds);
   let cursor;
   do {
     const body = { page_size: 100 };
     if (cursor) body.start_cursor = cursor;
-    const r = await fetch(`${NOTION}/data_sources/${board.ds}/query`, {
+    const r = await fetch(`${NOTION}/data_sources/${ds}/query`, {
       method: 'POST', headers: headers(), body: JSON.stringify(body)
     });
     if (!r.ok) {
-      const txt = await r.text();
-      throw new Error(`${board.creator} ${r.status} ${txt.slice(0, 180)}`);
+      let msg = `${r.status}`;
+      try { const e = await r.json(); if (e && e.message) msg = e.message.split('.')[0]; } catch {}
+      throw new Error(msg);
     }
     const j = await r.json();
     for (const page of j.results || []) {
@@ -169,7 +171,7 @@ export default async function handler(req, res) {
 
   try {
     const chunks = await Promise.all(roster.map(b =>
-      queryBoard(b).catch(e => ({ __err: b.creator + ': ' + e.message }))
+      queryBoard(b).catch(e => ({ __err: b.creator + ' — ' + e.message }))
     ));
     const videos = [];
     const problems = [];
