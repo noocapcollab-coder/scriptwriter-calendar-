@@ -5,7 +5,7 @@
 // If a column can't be found the request fails with a message naming what was
 // missing rather than writing a half-filled card.
 
-import { NOTION, headers, rosterFor } from './_boards.js';
+import { NOTION, headers, rosterFor, resolveDs } from './_boards.js';
 
 const schemaCache = new Map();
 
@@ -82,7 +82,8 @@ export default async function handler(req, res) {
   if (!board) return res.status(400).json({ error: `No board found for "${creator}"` });
 
   try {
-    const props = await schemaOf(board.ds);
+    const ds = await resolveDs(board.ds);
+    const props = await schemaOf(ds);
     const titleKey = pickTitle(props);
     const status = pickStatus(props);
     if (!titleKey) return res.status(422).json({ error: 'That board has no title column' });
@@ -106,7 +107,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({
-        parent: { type: 'data_source_id', data_source_id: board.ds },
+        parent: { type: 'data_source_id', data_source_id: ds },
         properties
       })
     });
