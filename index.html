@@ -72,7 +72,8 @@ h1{font-size:23px;font-weight:600;margin:0}
 .day.out{opacity:.32}
 .dnum{font-size:12px;color:var(--tx2);margin-bottom:6px}
 .dots{display:flex;gap:3px;flex-wrap:wrap}
-.dot{width:7px;height:7px;border-radius:50%}
+.dot{width:7px;height:7px;border-radius:50%;box-sizing:border-box}
+.dot.prov{background:transparent!important;border:1.5px solid currentColor}
 .legend{display:flex;gap:17px;flex-wrap:wrap;color:var(--tx3);font-size:12px;margin:12px 0 14px}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
 .filters button{padding:5px 12px;font-size:12.5px;border-radius:20px}
@@ -116,7 +117,8 @@ select.field{cursor:pointer}
 <div class="card" id="session" style="overflow:hidden;margin-bottom:18px"></div>
 
 <div class="kpis">
-  <div class="kpi"><div class="lab" id="k1lab">Left this week</div><div class="val" id="k1">—</div></div>
+  <div class="kpi"><div class="lab" id="k1lab">Left this week</div><div class="val" id="k1">—</div>
+    <div class="sub" style="margin-top:3px">personal only</div></div>
   <div class="kpi"><div class="lab">Posting next week</div><div class="val" id="k2">—</div></div>
   <div class="kpi"><div class="lab">To write this week</div><div class="val" id="k3" style="color:var(--blue)">—</div></div>
   <div class="kpi risk"><div class="lab">Locked dates, no script</div><div class="val" id="k4" style="color:var(--red)">—</div></div>
@@ -146,6 +148,7 @@ select.field{cursor:pointer}
     <span><span class="dot" style="background:var(--green);display:inline-block;margin-right:7px"></span>script approved</span>
     <span><span class="dot" style="background:var(--amber);display:inline-block;margin-right:7px"></span>in scripting</span>
     <span><span class="dot" style="background:var(--red);display:inline-block;margin-right:7px"></span>not started</span>
+    <span><span class="dot prov" style="color:var(--tx2);display:inline-block;margin-right:7px"></span>sponsor, date provisional</span>
     <span id="duenote" style="display:none">Mon&ndash;Wed posts are due Friday, Thu&ndash;Sat posts are due Wednesday</span>
   </div>
   <div class="filters" id="filters"></div>
@@ -167,7 +170,7 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 11:'ready',12:'posted',13:'repost'};
 
 var V=[], RATE={}, CREATORS=[];
-var calMode='post', who='all', saving=false;
+var calMode='post', who='all', saving=false, onlyPersonal=false;
 var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||1;
 var BUILTIN=[], FORMATS={};
 
@@ -219,12 +222,19 @@ function onDates(dates){
     return p&&dates.some(function(d){return same(d,p)})})
     .sort(function(a,b){return pdate(a)-pdate(b)});
 }
-function bankOf(c){return V.filter(function(v){return v.creator===c&&v.stage===1}).length}
+// Sponsor post dates are provisional, so they stay out of every figure and
+// are reported alongside instead.
+function isSpon(v){return v.kind==='Sponsor'}
+function bankOf(c){return V.filter(function(v){
+  return v.creator===c&&v.stage===1&&!isSpon(v)}).length}
+function sponAhead(c){return V.filter(function(v){
+  var p=pdate(v);
+  return v.creator===c&&isSpon(v)&&v.stage>=5&&(!p||p>=TODAY)}).length}
 
 // Script done and still in production — approval, to film or in edit.
 function inHand(c){return V.filter(function(v){
   var p=pdate(v);
-  return v.creator===c&&v.stage>=5&&(!p||p>=TODAY)}).length}
+  return v.creator===c&&!isSpon(v)&&v.stage>=5&&(!p||p>=TODAY)}).length}
 function coversWeeks(c){return inHand(c)/rateOf(c)}
 // Hold the cushion: write enough to get back up to it, nothing if already there.
 function needFor(c){return Math.max(0,Math.round(rateOf(c)*cushion-inHand(c)))}
@@ -249,7 +259,7 @@ function stale(v){var p=pdate(v);return !!p&&p<TODAY}
 var restFrom = TODAY, restTo = addD(mondayOf(TODAY),7);
 var restDays = Math.max(0,Math.round((restTo-restFrom)/864e5));
 function slotsRange(c,from,to){return V.filter(function(v){
-  var p=pdate(v);return v.creator===c&&p&&p>=from&&p<to})}
+  var p=pdate(v);return v.creator===c&&!isSpon(v)&&p&&p>=from&&p<to})}
 function slots(c,w){return w===thisWeek?slotsRange(c,restFrom,restTo)
   :slotsRange(c,w,addD(w,7))}
 function span(a,b){
@@ -410,7 +420,8 @@ function render(){
           '</div>'+
           '<div style="text-align:right">'+
             '<div style="font-size:15px;font-weight:500">'+hand+' ahead</div>'+
-            '<div class="sub">'+(hand?'scripted, in production · '+wk.toFixed(1)+' wks':'nothing scripted ahead')+'</div>'+
+            '<div class="sub">'+(hand?'personal, in production · '+wk.toFixed(1)+' wks':'nothing scripted ahead')+
+              (sponAhead(c)?' <span style="color:#93aaff">+'+sponAhead(c)+' sponsor</span>':'')+'</div>'+
           '</div>'+
         '</div>'+
         '<div class="meter" style="margin:12px 0 0"><i style="width:'+
@@ -433,6 +444,7 @@ function render(){
 function onDay(day){
   return V.filter(function(v){
     if(who!=='all'&&v.creator!==who) return false;
+    if(onlyPersonal&&isSpon(v)) return false;
     var d=calMode==='due'?dueOf(v):pdate(v);
     return same(d,day);
   }).sort(function(a,b){return a.stage-b.stage});
@@ -445,7 +457,9 @@ function renderCal(){
     .map(function(x){return '<div class="dow">'+x+'</div>'}).join('');
   document.getElementById('filters').innerHTML=
     '<button data-w="all" class="'+(who==='all'?'on':'')+'">All creators</button>'+
-    CREATORS.map(function(c){return '<button data-w="'+esc(c)+'" class="'+(who===c?'on':'')+'">'+esc(c)+'</button>'}).join('');
+    CREATORS.map(function(c){return '<button data-w="'+esc(c)+'" class="'+(who===c?'on':'')+'">'+esc(c)+'</button>'}).join('')+
+    '<span style="width:12px"></span>'+
+    '<button id="ponly" class="'+(onlyPersonal?'on':'')+'">Personal only</button>';
 
   var start=mondayOf(new Date(calMonth.getFullYear(),calMonth.getMonth(),1)),cells='';
   for(var i=0;i<42;i++){
@@ -456,13 +470,15 @@ function renderCal(){
       (isToday?' today':'')+(same(day,selDay)?' sel':'')+'" data-i="'+i+'">'+
       '<div class="dnum"'+(isToday?' style="color:var(--blue);font-weight:600"':'')+'>'+day.getDate()+'</div>'+
       '<div class="dots">'+list.slice(0,12).map(function(v){
-        return '<span class="dot" style="background:'+toneHex(v.stage)+'"></span>'}).join('')+'</div></button>';
+        return '<span class="dot'+(isSpon(v)?' prov':'')+'" style="'+
+          (isSpon(v)?'color:':'background:')+toneHex(v.stage)+'"></span>'}).join('')+'</div></button>';
   }
   document.getElementById('cal').innerHTML=cells;
   Array.prototype.forEach.call(document.querySelectorAll('.day'),function(b){
     b.onclick=function(){selDay=addD(start,+b.dataset.i);renderCal()}});
-  Array.prototype.forEach.call(document.querySelectorAll('#filters button'),function(b){
+  Array.prototype.forEach.call(document.querySelectorAll('#filters button[data-w]'),function(b){
     b.onclick=function(){who=b.dataset.w;renderCal()}});
+  document.getElementById('ponly').onclick=function(){onlyPersonal=!onlyPersonal;renderCal()};
 
   var sel=onDay(selDay),lab=calMode==='due'?'script due':'posting';
   var back=selDay<TODAY?' <span class="sub">· in the past</span>':'';
