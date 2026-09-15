@@ -68,7 +68,7 @@ export function rosterFor(query) {
 // databases endpoint which data source belongs to it.
 const dsCache = new Map();
 
-export async function resolveDs(id) {
+export async function resolveDs(id, creator) {
   const hit = dsCache.get(id);
   if (hit) return hit;
 
@@ -97,19 +97,28 @@ export async function resolveDs(id) {
 
   const inside = await databaseInsidePage(id);
   if (inside) {
-    const resolved = await resolveDs(inside);
+    const resolved = await resolveDs(inside, creator);
     dsCache.set(id, resolved);
     return resolved;
   }
 
-  throw new Error('that page opened fine but has no board on it that the integration ' +
-    'can see — link the REELS board directly instead');
+  const searched = await findBoardByName(creator);
+  if (searched && searched !== id) {
+    const resolved = await resolveDs(searched, null);
+    dsCache.set(id, resolved);
+    return resolved;
+  }
+
+  throw new Error('that page opened fine but the board on it is a linked "View of…" copy, ' +
+    'which Notion does not expose — share the original REELS board with the integration ' +
+    'and use its id');
 }
 
 // Walk a page's blocks a couple of levels deep (boards often sit inside
 // columns or toggles) and return the best child database id.
-async function databaseInsidePage(pageId, depth = 0) {
-  if (depth > 2) return null;
+async function databaseInsidePage(pageId, depth = 0, seen = new Set()) {
+  if (depth > 3 || seen.has(pageId)) return null;
+  seen.add(pageId);
   const r = await fetch(`${NOTION}/blocks/${pageId}/children?page_size=100`, { headers: headers() });
   if (!r.ok) return null;
   const j = await r.json();
@@ -121,11 +130,48 @@ async function databaseInsidePage(pageId, depth = 0) {
     return (named || dbs[0]).id;
   }
 
+  // A dashboard often points at the real board rather than holding it.
   for (const b of blocks) {
-    if (!b.has_children) continue;
-    if (!['column_list', 'column', 'toggle', 'synced_block', 'callout'].includes(b.type)) continue;
-    const found = await databaseInsidePage(b.id, depth + 1);
+    if (b.type !== 'link_to_page') continue;
+    const l = b.link_to_page || {};
+    if (l.database_id) return l.database_id;
+    if (l.data_source_id) return l.data_source_id;
+    if (l.page_id) {
+      const found = await databaseInsidePage(l.page_id, depth + 1, seen);
+      if (found) return found;
+    }
+  }
+
+  const containers = ['column_list', 'column', 'toggle', 'synced_block', 'callout', 'child_page'];
+  for (const b of blocks) {
+    if (b.type !== 'child_page' && !b.has_children) continue;
+    if (!containers.includes(b.type)) continue;
+    const found = await databaseInsidePage(b.id, depth + 1, seen);
     if (found) return found;
   }
   return null;
+}
+
+// Last resort: ask Notion for a board by name. Anything shared with the
+// integration is searchable, so this finds boards a dashboard only links to.
+async function findBoardByName(creator) {
+  if (!creator) return null;
+  const r = await fetch(`${NOTION}/search`, {
+    method: 'POST', headers: headers(),
+    body: JSON.stringify({ query: `${creator} REELS`, page_size: 20 })
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  const first = String(creator).trim().split(/\s+/)[0].toLowerCase();
+
+  const titleOf = o => {
+    const t = o.title || (o.name ? [{ plain_text: o.name }] : []);
+    return (Array.isArray(t) ? t.map(x => x.plain_text || '').join('') : String(t || '')).toLowerCase();
+  };
+
+  const hits = (j.results || []).filter(o => o.object === 'database' || o.object === 'data_source');
+  const exact = hits.find(o => titleOf(o).includes(first) && /reel/.test(titleOf(o)));
+  const loose = hits.find(o => titleOf(o).includes(first));
+  const pick = exact || loose;
+  return pick ? pick.id : null;
 }
