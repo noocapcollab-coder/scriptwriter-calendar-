@@ -82,7 +82,7 @@ export default async function handler(req, res) {
   if (!board) return res.status(400).json({ error: `No board found for "${creator}"` });
 
   try {
-    const ds = await resolveDs(board.ds);
+    const ds = await resolveDs(board.ds, board.creator);
     const props = await schemaOf(ds);
     const titleKey = pickTitle(props);
     const status = pickStatus(props);
