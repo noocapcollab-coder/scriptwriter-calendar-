@@ -88,7 +88,7 @@ function stageOf(label) {
 
 async function queryBoard(board) {
   const out = [];
-  const ds = await resolveDs(board.ds);
+  const ds = await resolveDs(board.ds, board.creator);
   let cursor;
   do {
     const body = { page_size: 100 };
