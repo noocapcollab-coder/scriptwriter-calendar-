@@ -74,6 +74,9 @@ h1{font-size:23px;font-weight:600;margin:0}
 .dots{display:flex;gap:3px;flex-wrap:wrap}
 .dot{width:7px;height:7px;border-radius:50%;box-sizing:border-box}
 .dot.prov{background:transparent!important;border:1.5px solid currentColor}
+.dot.done{opacity:.45}
+.crow.done .vt{color:var(--tx3)}
+.crow.done{opacity:.72}
 .legend{display:flex;gap:17px;flex-wrap:wrap;color:var(--tx3);font-size:12px;margin:12px 0 14px}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
 .filters button{padding:5px 12px;font-size:12.5px;border-radius:20px}
@@ -149,6 +152,7 @@ select.field{cursor:pointer}
     <span><span class="dot" style="background:var(--amber);display:inline-block;margin-right:7px"></span>in scripting</span>
     <span><span class="dot" style="background:var(--red);display:inline-block;margin-right:7px"></span>not started</span>
     <span><span class="dot prov" style="color:var(--tx2);display:inline-block;margin-right:7px"></span>sponsor, date provisional</span>
+    <span><span class="dot done" style="background:var(--tx3);display:inline-block;margin-right:7px"></span>past scripting</span>
     <span id="duenote" style="display:none">Mon&ndash;Wed posts are due Friday, Thu&ndash;Sat posts are due Wednesday</span>
   </div>
   <div class="filters" id="filters"></div>
@@ -169,7 +173,14 @@ var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script d
 5:'script approval',6:'to film',7:'in edit',8:'changes',9:'approval',10:'to post',
 11:'ready',12:'posted',13:'repost'};
 
-var V=[], RATE={}, CREATORS=[];
+var V=[], VALL=[], RATE={}, CREATORS=[];
+// Videos at or past this stage are out of the scriptwriter's hands. They show
+// on the posting calendar as dimmed context and never enter a calculation.
+var DONE_FROM=8;
+// A sponsor date is guesswork while the script is still being written, so
+// "Personal only" hides sponsors below this stage. At To Post it is committed.
+var SPON_COMMIT=10;
+function isDone(v){return v.stage>=DONE_FROM}
 var calMode='post', who='all', saving=false, onlyPersonal=false;
 var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||1;
 var BUILTIN=[], FORMATS={};
@@ -290,9 +301,12 @@ async function load(fresh){
     if(!r.ok) throw new Error('api returned '+r.status);
     var j=await r.json();
     if(j.error) throw new Error(j.error);
-    // Only the live pipeline: idea assigned (1) through in edit (7).
-    // Changes, approval, to post, ready, posted and repost are out of scope.
+    // V drives every figure on the page: idea assigned (1) through in edit (7).
+    // Changes, approval, to post, ready, posted and repost stay out of it so
+    // finished work can never inflate "scripts in hand".
     V=(j.videos||[]).filter(function(v){return v.stage>=1&&v.stage<=7});
+    // VALL is the posting calendar only — the full slate, whatever the stage.
+    VALL=(j.videos||[]).filter(function(v){return v.stage>=1});
     RATE=j.rates||{}; CREATORS=j.creators||[];
     BUILTIN=j.builtIn||[]; FORMATS=j.formats||{};
     renderRoster();
@@ -442,9 +456,12 @@ function render(){
 }
 
 function onDay(day){
-  return V.filter(function(v){
+  // Post dates show the whole slate; script due only makes sense for videos
+  // still in scripting, so that mode keeps the narrow list.
+  var src = calMode==='due' ? V : VALL;
+  return src.filter(function(v){
     if(who!=='all'&&v.creator!==who) return false;
-    if(onlyPersonal&&isSpon(v)) return false;
+    if(onlyPersonal&&isSpon(v)&&v.stage<SPON_COMMIT) return false;
     var d=calMode==='due'?dueOf(v):pdate(v);
     return same(d,day);
   }).sort(function(a,b){return a.stage-b.stage});
@@ -470,8 +487,8 @@ function renderCal(){
       (isToday?' today':'')+(same(day,selDay)?' sel':'')+'" data-i="'+i+'">'+
       '<div class="dnum"'+(isToday?' style="color:var(--blue);font-weight:600"':'')+'>'+day.getDate()+'</div>'+
       '<div class="dots">'+list.slice(0,12).map(function(v){
-        return '<span class="dot'+(isSpon(v)?' prov':'')+'" style="'+
-          (isSpon(v)?'color:':'background:')+toneHex(v.stage)+'"></span>'}).join('')+'</div></button>';
+        return '<span class="dot'+(isSpon(v)?' prov':'')+(isDone(v)?' done':'')+'" style="'+
+          (isSpon(v)?'color:':'background:')+(isDone(v)?'var(--tx3)':toneHex(v.stage))+'"></span>'}).join('')+'</div></button>';
   }
   document.getElementById('cal').innerHTML=cells;
   Array.prototype.forEach.call(document.querySelectorAll('.day'),function(b){
@@ -496,13 +513,15 @@ function renderCal(){
   document.getElementById('daypanel').innerHTML=
     '<div class="chd"><span class="name">'+fmt(selDay)+back+'</span><span class="sub">'+
     (sel.length?sel.length+' '+lab+' · '+sel.filter(function(v){return v.kind==='Sponsor'}).length+
-      ' sponsor · '+sel.filter(function(v){return v.stage<5}).length+' unscripted':'nothing '+lab)+
+      ' sponsor · '+sel.filter(function(v){return !isDone(v)&&v.stage<5}).length+' unscripted'+
+      (sel.filter(isDone).length?' · '+sel.filter(isDone).length+' past scripting':'')
+      :'nothing '+lab)+
     '</span></div>'+
-    (sel.length?sel.map(function(v){return '<div class="crow">'+
+    (sel.length?sel.map(function(v){return '<div class="crow'+(isDone(v)?' done':'')+'">'+
       '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
       esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
       '<span style="white-space:nowrap">'+kindChip(v)+
-      '<span class="chip c-'+tone(v.stage)+'">'+v.stage+' · '+esc(label(v.stage))+
+      '<span class="chip c-'+(isDone(v)?'n':tone(v.stage))+'">'+v.stage+' · '+esc(label(v.stage))+
       (calMode==='due'&&pdate(v)?' · posts '+dmy(pdate(v)):'')+'</span></span></div>'}).join('')
       :'<div class="empty">Nothing on this day yet.</div>')+addForm;
 
