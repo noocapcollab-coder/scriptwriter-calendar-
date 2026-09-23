@@ -13,9 +13,12 @@ export const BOARDS = [
   { creator: 'Emtech',  ds: '328508e9-9dda-8000-b3c9-000b0d791507', format: 'Short' },
   { creator: 'Duncan',  ds: '328508e9-9dda-8186-b4ca-000bd212e84b', format: 'Short' },
   { creator: 'Valeri',  ds: 'f0dbec00-505d-4e16-8e51-b2fcfea21445', format: 'Short' },
-  // These two are dashboard page ids, not board ids — resolveDs looks inside
-  // the page and picks the REELS board out of it.
-  { creator: 'Nicole',    ds: '62d508e9-9dda-8376-be56-815c11dcacdc', format: 'Short' },
+  // Nicole's dashboard only holds linked "View of…" copies, so point straight at
+  // the source: NICOLE'S CONTENT DATABASE (Client Portals / TEMPLATE DATABASE).
+  // It mixes short and long form; each row's Format column decides which.
+  { creator: 'Nicole',    ds: '25b449d2-35ba-4026-992e-39af9974b158', format: 'Short' },
+  // Dashboard page id, not a board id — resolveDs looks inside the page and
+  // picks the REELS board out of it.
   { creator: 'David Iya', ds: 'a7d508e9-9dda-82d2-bb80-0166574f4246', format: 'Short' }
 ];
 
