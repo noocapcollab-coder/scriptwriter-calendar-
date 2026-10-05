@@ -49,6 +49,25 @@ h1{font-size:23px;font-weight:600;margin:0}
 .crow .rnwrap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
 .crow .rnwrap .field{flex:1;min-width:160px;padding:6px 9px;font-size:13.5px}
 .crow .rnerr{color:var(--red);font-size:11.5px}
+.ed{background:none;border:1px solid var(--line);color:var(--tx2);cursor:pointer;
+  padding:2px 9px;margin-left:6px;font-size:11.5px;border-radius:6px}
+.ed:hover{color:var(--tx);border-color:#33507f}
+#edwrap{position:fixed;inset:0;background:rgba(3,5,10,.62);display:none;z-index:50;
+  align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto}
+#edwrap.on{display:flex}
+#edbox{background:#0f131d;border:1px solid var(--line);border-radius:12px;width:min(820px,100%);
+  box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#edbox .hd{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 18px;border-bottom:1px solid var(--line)}
+#edbox .hd .t{font-size:15px;font-weight:600;color:var(--tx)}
+#edbox .bd{padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+#edbox label{font-size:11.5px;color:var(--tx3);display:block;margin-bottom:5px}
+#edbody{width:100%;min-height:46vh;resize:vertical;font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+  padding:11px 12px;box-sizing:border-box}
+#edbox .ft{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 18px;border-top:1px solid var(--line)}
+#edbox .note{font-size:11.5px;color:var(--tx3)}
+#edbox .warn{font-size:12px;color:var(--amber)}
 .chip{font-size:11px;padding:3px 9px;border-radius:6px;white-space:nowrap}
 .c-g{background:var(--greenbg);color:var(--green)}
 .c-a{background:var(--amberbg);color:var(--amber)}
@@ -526,7 +545,8 @@ function renderCal(){
     (sel.length?sel.map(function(v){return '<div class="crow'+(isDone(v)?' done':'')+'">'+
       '<span class="ttl"><a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
       esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
-      '<button class="rn" data-id="'+esc(v.id)+'" title="Rename">✎</button></span>'+
+      '<button class="rn" data-id="'+esc(v.id)+'" title="Rename">✎</button>'+
+      '<button class="ed" data-id="'+esc(v.id)+'" title="Edit status and script">Edit</button></span>'+
       '<span style="white-space:nowrap">'+kindChip(v)+
       '<span class="chip c-'+(isDone(v)?'n':tone(v.stage))+'">'+v.stage+' · '+esc(label(v.stage))+
       (calMode==='due'&&pdate(v)?' · posts '+dmy(pdate(v)):'')+'</span></span></div>'}).join('')
@@ -534,6 +554,8 @@ function renderCal(){
 
   Array.prototype.forEach.call(document.querySelectorAll('#daypanel .rn'),function(b){
     b.onclick=function(){startRename(b)}});
+  Array.prototype.forEach.call(document.querySelectorAll('#daypanel .ed'),function(b){
+    b.onclick=function(){openEditor(b.dataset.id)}});
 
   var cre=document.getElementById('tcre'), tit=document.getElementById('ttitle'),
       typ=document.getElementById('ttype'), add=document.getElementById('tadd'),
@@ -605,6 +627,100 @@ function startRename(btn){
       err.textContent=e.message; save.disabled=false; save.textContent='Save';
     }
   };
+}
+
+// Card editor: status plus the script body, both written back to Notion.
+// Pages with images, toggles or embeds open read-only so a save can't wipe them.
+var ED=null;
+function edEl(){
+  var w=document.getElementById('edwrap');
+  if(w) return w;
+  w=document.createElement('div'); w.id='edwrap';
+  w.innerHTML='<div id="edbox">'+
+    '<div class="hd"><span class="t" id="edtitle"></span>'+
+      '<a id="edopen" target="_blank" rel="noopener" class="note">Open in Notion ↗</a></div>'+
+    '<div class="bd">'+
+      '<div><label>Status</label><select class="field" id="edstatus"></select></div>'+
+      '<div><label>Script</label><div class="warn" id="edwarn" style="display:none;margin-bottom:6px"></div>'+
+        '<textarea class="field" id="edbody" spellcheck="true"></textarea></div>'+
+    '</div>'+
+    '<div class="ft"><span class="note" id="ednote">Loading…</span>'+
+      '<span class="row" style="gap:7px"><button id="edcancel">Close</button>'+
+      '<button id="edsave" style="border-color:#33507f;color:var(--tx)">Save</button></span></div>'+
+  '</div>';
+  document.body.appendChild(w);
+  w.onclick=function(e){if(e.target===w) closeEditor()};
+  document.getElementById('edcancel').onclick=closeEditor;
+  document.addEventListener('keydown',function(e){
+    if(!ED) return;
+    if(e.key==='Escape') closeEditor();
+    if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();document.getElementById('edsave').click()}
+  });
+  document.getElementById('edsave').onclick=saveEditor;
+  return w;
+}
+function edDirty(){
+  if(!ED||!ED.loaded) return false;
+  return document.getElementById('edstatus').value!==ED.status||
+    (!ED.readOnly&&document.getElementById('edbody').value!==ED.body);
+}
+function closeEditor(){
+  if(edDirty()&&!confirm('Discard your unsaved changes?')) return;
+  ED=null; document.getElementById('edwrap').classList.remove('on');
+}
+async function openEditor(id){
+  var v=VALL.filter(function(x){return x.id===id})[0]||V.filter(function(x){return x.id===id})[0];
+  if(!v) return;
+  var w=edEl(); w.classList.add('on');
+  ED={id:id,loaded:false};
+  var st=document.getElementById('edstatus'), bd=document.getElementById('edbody'),
+      note=document.getElementById('ednote'), warn=document.getElementById('edwarn'),
+      save=document.getElementById('edsave');
+  document.getElementById('edtitle').textContent=v.creator+' · '+v.title;
+  document.getElementById('edopen').href=notionURL(id);
+  st.innerHTML='<option>'+esc(v.stageLabel||label(v.stage))+'</option>'; st.disabled=true;
+  bd.value=''; bd.disabled=true; warn.style.display='none';
+  save.disabled=true; save.textContent='Save'; note.textContent='Loading…';
+  try{
+    var q=rosterQS();
+    var r=await fetch('/api/card?id='+encodeURIComponent(id)+(q?'&'+q:''));
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.error||('failed with '+r.status));
+    if(!ED||ED.id!==id) return;
+    ED.status=j.status||''; ED.body=j.body||''; ED.readOnly=!!j.readOnly; ED.loaded=true;
+    st.innerHTML=(j.statusOptions||[]).map(function(o){
+      return '<option'+(o===j.status?' selected':'')+'>'+esc(o)+'</option>'}).join('');
+    st.disabled=false;
+    bd.value=ED.body; bd.disabled=ED.readOnly; bd.readOnly=ED.readOnly;
+    if(ED.readOnly){warn.textContent=j.reason; warn.style.display='block'}
+    else if(j.flattens){warn.textContent='Bold, italics and links in this script become plain text if you save the script.'; warn.style.display='block'}
+    note.textContent=ED.readOnly?'You can still change the status here.':'Saves to Notion. Ctrl/⌘+S works too.';
+    save.disabled=false;
+    if(!ED.readOnly) bd.focus();
+  }catch(e){ note.textContent=e.message }
+}
+async function saveEditor(){
+  if(!ED||!ED.loaded) return;
+  var st=document.getElementById('edstatus'), bd=document.getElementById('edbody'),
+      note=document.getElementById('ednote'), save=document.getElementById('edsave');
+  var payload={id:ED.id}, changed=false;
+  if(st.value!==ED.status){payload.status=st.value; changed=true}
+  if(!ED.readOnly&&bd.value!==ED.body){payload.body=bd.value; changed=true}
+  if(!changed){note.textContent='Nothing changed.'; return}
+  save.disabled=true; save.textContent='Saving…';
+  try{
+    var q=rosterQS();
+    var r=await fetch('/api/card'+(q?'?'+q:''),{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.error||('failed with '+r.status));
+    if(payload.status) ED.status=payload.status;
+    if(payload.body!==undefined) ED.body=payload.body;
+    note.textContent='Saved to Notion.'; save.textContent='Save'; save.disabled=false;
+    if(payload.status) load(true);
+  }catch(e){
+    note.textContent=e.message; save.textContent='Save'; save.disabled=false;
+  }
 }
 
 function normId(raw){
