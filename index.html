@@ -43,6 +43,12 @@ h1{font-size:23px;font-weight:600;margin:0}
 .vt{font-size:13.5px;border-bottom:1px solid transparent}
 .vt:hover{border-bottom-color:var(--tx3);color:#fff}
 .who{color:var(--tx3)}
+.rn{background:none;border:0;color:var(--tx3);cursor:pointer;padding:2px 6px;margin-left:4px;
+  font-size:12.5px;border-radius:5px;opacity:.55}
+.rn:hover{opacity:1;color:var(--tx);background:#161b27}
+.crow .rnwrap{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+.crow .rnwrap .field{flex:1;min-width:160px;padding:6px 9px;font-size:13.5px}
+.crow .rnerr{color:var(--red);font-size:11.5px}
 .chip{font-size:11px;padding:3px 9px;border-radius:6px;white-space:nowrap}
 .c-g{background:var(--greenbg);color:var(--green)}
 .c-a{background:var(--amberbg);color:var(--amber)}
@@ -518,12 +524,16 @@ function renderCal(){
       :'nothing '+lab)+
     '</span></div>'+
     (sel.length?sel.map(function(v){return '<div class="crow'+(isDone(v)?' done':'')+'">'+
-      '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
+      '<span class="ttl"><a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
       esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
+      '<button class="rn" data-id="'+esc(v.id)+'" title="Rename">✎</button></span>'+
       '<span style="white-space:nowrap">'+kindChip(v)+
       '<span class="chip c-'+(isDone(v)?'n':tone(v.stage))+'">'+v.stage+' · '+esc(label(v.stage))+
       (calMode==='due'&&pdate(v)?' · posts '+dmy(pdate(v)):'')+'</span></span></div>'}).join('')
       :'<div class="empty">Nothing on this day yet.</div>')+addForm;
+
+  Array.prototype.forEach.call(document.querySelectorAll('#daypanel .rn'),function(b){
+    b.onclick=function(){startRename(b)}});
 
   var cre=document.getElementById('tcre'), tit=document.getElementById('ttitle'),
       typ=document.getElementById('ttype'), add=document.getElementById('tadd'),
@@ -553,6 +563,46 @@ function renderCal(){
     }catch(e){
       err.textContent=e.message;
       add.disabled=false; add.textContent='Add to '+dmy(selDay);
+    }
+  };
+}
+
+// Inline rename: swaps the title for an input, Enter saves to Notion, Esc
+// cancels. The local copy updates straight away, then a fresh pull confirms.
+function startRename(btn){
+  var id=btn.dataset.id;
+  var v=VALL.filter(function(x){return x.id===id})[0]||V.filter(function(x){return x.id===id})[0];
+  if(!v) return;
+  var host=btn.parentNode;
+  host.className='rnwrap';
+  host.innerHTML='<span class="who" style="white-space:nowrap">'+esc(v.creator)+' · </span>'+
+    '<input class="field" value="'+esc(v.title)+'" maxlength="200">'+
+    '<button class="rnsave" style="border-color:#33507f;color:var(--tx)">Save</button>'+
+    '<button class="rncancel">Cancel</button><span class="rnerr"></span>';
+  var inp=host.querySelector('input'), save=host.querySelector('.rnsave'),
+      err=host.querySelector('.rnerr');
+  inp.focus(); inp.select();
+  host.querySelector('.rncancel').onclick=function(){renderCal()};
+  inp.onkeydown=function(e){
+    if(e.key==='Enter') save.click();
+    if(e.key==='Escape') renderCal();
+  };
+  save.onclick=async function(){
+    var t=inp.value.trim();
+    if(!t){err.textContent='Title can\'t be empty'; return}
+    if(t===v.title){renderCal(); return}
+    save.disabled=true; save.textContent='Saving…'; err.textContent='';
+    try{
+      var q=rosterQS();
+      var r=await fetch('/api/rename'+(q?'?'+q:''),{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,title:t})});
+      var j=await r.json();
+      if(!r.ok) throw new Error(j.error||('failed with '+r.status));
+      [V,VALL].forEach(function(list){list.forEach(function(x){if(x.id===id) x.title=t})});
+      renderCal();
+      load(true);
+    }catch(e){
+      err.textContent=e.message; save.disabled=false; save.textContent='Save';
     }
   };
 }
