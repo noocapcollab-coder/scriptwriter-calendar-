@@ -4,6 +4,9 @@
 export const NOTION = 'https://api.notion.com/v1';
 export const VERSION = '2025-09-03';
 
+// dateProp (optional) names the date column that holds the posting date, for
+// boards where the "first column mentioning post" guess picks the wrong one.
+//
 // format is a property of the board: REELS boards are short form throughout.
 // Add a long-form YouTube board through the page's Creators panel.
 export const BOARDS = [
@@ -19,7 +22,9 @@ export const BOARDS = [
   { creator: 'Nicole',    ds: '25b449d2-35ba-4026-992e-39af9974b158', format: 'Short' },
   // Dashboard page id, not a board id — resolveDs looks inside the page and
   // picks the REELS board out of it.
-  { creator: 'David Iya', ds: 'a7d508e9-9dda-82d2-bb80-0166574f4246', format: 'Short' }
+  // David's board has both POST DATE and DUE DATE, and his team schedules on
+  // DUE DATE (that's what his Notion calendar view shows), so pin it here.
+  { creator: 'David Iya', ds: 'a7d508e9-9dda-82d2-bb80-0166574f4246', format: 'Short', dateProp: 'DUE DATE' }
 ];
 
 export function headers() {
