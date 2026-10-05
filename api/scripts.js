@@ -30,7 +30,13 @@ function findStatus(props) {
   return findByType(props, 'status') || findByType(props, 'select');
 }
 
-function findPostDate(props) {
+function findPostDate(props, prefer) {
+  // A board that names its date column uses only that column, so a stale
+  // value in some other date field can't leak onto the calendar.
+  if (prefer && props[prefer] && props[prefer].type === 'date') {
+    const d = props[prefer].date;
+    return d && d.start ? d.start : null;
+  }
   let fallback = null;
   for (const k in props) {
     const p = props[k];
@@ -124,7 +130,7 @@ async function queryBoard(board) {
         kind: findKind(tags),
         format: findFormat(tags) || board.format || 'Short',
         tags,
-        postDate: findPostDate(props)
+        postDate: findPostDate(props, board.dateProp)
       });
     }
     cursor = j.has_more ? j.next_cursor : null;
