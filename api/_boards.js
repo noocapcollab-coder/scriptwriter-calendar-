@@ -183,3 +183,27 @@ async function findBoardByName(creator) {
   const pick = exact || loose;
   return pick ? pick.id : null;
 }
+
+
+// Loads a card and confirms it lives on one of the roster's boards, so the
+// write endpoints can never touch an arbitrary Notion page. Returns
+// { page, ds, hex } or throws an Error carrying an http status.
+export async function loadRosterCard(id, query) {
+  const hex = String(id || '').replace(/-/g, '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(hex)) throw Object.assign(new Error('Bad card id'), { status: 400 });
+
+  const pr = await fetch(`${NOTION}/pages/${hex}`, { headers: headers() });
+  const page = await pr.json().catch(() => ({}));
+  if (!pr.ok) throw Object.assign(new Error((page && page.message) || `Notion returned ${pr.status}`), { status: pr.status });
+
+  const parent = page.parent || {};
+  const parentIds = [parent.data_source_id, parent.database_id]
+    .filter(Boolean).map(x => String(x).replace(/-/g, ''));
+  for (const b of rosterFor(query || {})) {
+    try {
+      const ds = await resolveDs(b.ds, b.creator);
+      if (parentIds.includes(String(ds).replace(/-/g, ''))) return { page, ds, hex };
+    } catch {}
+  }
+  throw Object.assign(new Error('That card is not on one of the creator boards'), { status: 403 });
+}
