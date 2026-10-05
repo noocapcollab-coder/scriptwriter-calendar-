@@ -25,7 +25,8 @@ function pickTitle(props) {
   return null;
 }
 
-function pickDate(props) {
+function pickDate(props, prefer) {
+  if (prefer && props[prefer] && props[prefer].type === 'date') return prefer;
   let fallback = null;
   for (const k in props) {
     if (props[k].type !== 'date') continue;
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
       ? { status: { name: status.option } }
       : { select: { name: status.option } };
 
-    const dateKey = date ? pickDate(props) : null;
+    const dateKey = date ? pickDate(props, board.dateProp) : null;
     if (dateKey) properties[dateKey] = { date: { start: date } };
 
     const t = pickType(props, type);
