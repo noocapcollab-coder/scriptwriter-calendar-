@@ -20,11 +20,10 @@ export const BOARDS = [
   // the source: NICOLE'S CONTENT DATABASE (Client Portals / TEMPLATE DATABASE).
   // It mixes short and long form; each row's Format column decides which.
   { creator: 'Nicole',    ds: '25b449d2-35ba-4026-992e-39af9974b158', format: 'Short' },
-  // Dashboard page id, not a board id — resolveDs looks inside the page and
-  // picks the REELS board out of it.
-  // David's board has both POST DATE and DUE DATE, and his team schedules on
-  // DUE DATE (that's what his Notion calendar view shows), so pin it here.
-  { creator: 'David Iya', ds: 'a7d508e9-9dda-82d2-bb80-0166574f4246', format: 'Short', dateProp: 'DUE DATE' }
+  // DAVID IYA CONTENT PLANNER, the source board on his dashboard. Pointing at
+  // the board itself, because looking it up through the dashboard page broke.
+  // His team schedules on DUE DATE (what his Notion calendar shows), so pin it.
+  { creator: 'David Iya', ds: '898508e9-9dda-8383-ad90-070f01618f5a', format: 'Short', dateProp: 'DUE DATE' }
 ];
 
 export function headers() {
