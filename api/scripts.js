@@ -7,14 +7,14 @@
 // 'select', and the post date from the first date property whose name
 // mentions "post" (falling back to any date property).
 
-import { NOTION, BOARDS, headers, rosterFor, resolveDs } from './_boards.js';
+import { NOTION, BOARDS, headers, rosterFor, resolveDs, notionFetch } from './_boards.js';
 
 // Leave a creator out to measure their rate from the last 4 weeks of posts.
 // Put a number here to pin it instead (contracted output, new creator, etc).
 const PINNED_RATE = {};
 
 // Script deadlines come from the weekly cycle, worked out in the page.
-let cache = new Map();
+const cache = new Map();
 
 function findByType(props, type) {
   for (const k in props) if (props[k] && props[k].type === type) return props[k];
@@ -92,21 +92,44 @@ function stageOf(label) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// Only cards edited in the last 120 days are fetched. Old posted videos make
+// up most of each board and nothing on the page needs them, so this cuts the
+// number of Notion pages per board (and so the calls) by a lot.
+const WINDOW_DAYS = 120;
+
+// Built-in ids are already data source ids, so query them straight away and
+// only fall back to the slower resolveDs lookup if Notion says no.
+const goodDs = new Map();
+
+async function queryPage(ds, cursor) {
+  const since = new Date(Date.now() - WINDOW_DAYS * 864e5).toISOString();
+  const body = {
+    page_size: 100,
+    filter: { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } }
+  };
+  if (cursor) body.start_cursor = cursor;
+  return notionFetch(`${NOTION}/data_sources/${ds}/query`, {
+    method: 'POST', headers: headers(), body: JSON.stringify(body)
+  });
+}
+
+async function errorOf(r) {
+  let msg = `${r.status}`;
+  try { const e = await r.json(); if (e && e.message) msg = e.message.split('.')[0]; } catch {}
+  return new Error(msg);
+}
+
 async function queryBoard(board) {
   const out = [];
-  const ds = await resolveDs(board.ds, board.creator);
-  let cursor;
-  do {
-    const body = { page_size: 100 };
-    if (cursor) body.start_cursor = cursor;
-    const r = await fetch(`${NOTION}/data_sources/${ds}/query`, {
-      method: 'POST', headers: headers(), body: JSON.stringify(body)
-    });
-    if (!r.ok) {
-      let msg = `${r.status}`;
-      try { const e = await r.json(); if (e && e.message) msg = e.message.split('.')[0]; } catch {}
-      throw new Error(msg);
-    }
+  let ds = goodDs.get(board.ds) || board.ds;
+  let r = await queryPage(ds);
+  if (!r.ok && (r.status === 404 || r.status === 400) && !goodDs.has(board.ds)) {
+    ds = await resolveDs(board.ds, board.creator);
+    r = await queryPage(ds);
+  }
+  for (;;) {
+    if (!r.ok) throw await errorOf(r);
+    goodDs.set(board.ds, ds);
     const j = await r.json();
     for (const page of j.results || []) {
       if (page.archived || page.in_trash) continue;
@@ -133,8 +156,9 @@ async function queryBoard(board) {
         postDate: findPostDate(props, board.dateProp)
       });
     }
-    cursor = j.has_more ? j.next_cursor : null;
-  } while (cursor);
+    if (!j.has_more) break;
+    r = await queryPage(ds, j.next_cursor);
+  }
   return out;
 }
 
@@ -159,14 +183,71 @@ function measureRates(videos, roster) {
   return rates;
 }
 
+// The last good result for each board. If Notion rate limits one board, the
+// page shows that board's last copy instead of dropping it.
+const lastGood = new Map();
+// Requests that arrive while a sync is running wait for it instead of
+// starting their own.
+const inflight = new Map();
+// A forced refresh (after an edit, or the Reload button) still reuses a sync
+// that is only a few seconds old.
+const FRESH_FLOOR_MS = 8000;
+const CACHE_MS = 30000;
+
+async function sync(roster, ckey) {
+  const chunks = [];
+  // One board at a time: notionFetch spaces the calls, and running boards in
+  // parallel only creates bursts that trip the limit.
+  for (const b of roster) {
+    try {
+      const videos = await queryBoard(b);
+      lastGood.set(b.ds, { at: Date.now(), videos });
+      chunks.push({ videos });
+    } catch (e) {
+      const old = lastGood.get(b.ds);
+      chunks.push(old
+        ? { videos: old.videos, stale: b.creator }
+        : { err: b.creator + ' — ' + e.message });
+    }
+  }
+  const videos = [], problems = [], stale = [];
+  for (const c of chunks) {
+    if (c.err) problems.push(c.err);
+    else { videos.push(...c.videos); if (c.stale) stale.push(c.stale); }
+  }
+  const vocab = {};
+  for (const v of videos) for (const t of (v.tags || [])) vocab[t] = (vocab[t] || 0) + 1;
+  const payload = {
+    videos,
+    tagVocab: Object.entries(vocab).sort((a, b) => b[1] - a[1]).slice(0, 60),
+    rates: measureRates(videos, roster),
+    creators: roster.map(b => b.creator),
+    formats: Object.fromEntries(roster.map(b => [b.creator, b.format || 'Short'])),
+    builtIn: BOARDS.map(b => b.creator),
+    problems,
+    stale,
+    syncedAt: new Date().toISOString()
+  };
+  if (cache.size > 12) cache.clear();
+  cache.set(ckey, { at: Date.now(), payload });
+  return payload;
+}
+
 export default async function handler(req, res) {
   const query = req.query || {};
   const fresh = query.fresh === '1';
   const roster = rosterFor(query);
   const ckey = roster.map(b => b.ds).join('|');
 
+  // Normal polls can be served by Vercel's edge cache, so many open tabs
+  // share one sync instead of each hitting Notion.
+  res.setHeader('Cache-Control', fresh
+    ? 'no-store'
+    : 's-maxage=30, stale-while-revalidate=300');
+
   const hit = cache.get(ckey);
-  if (!fresh && hit && Date.now() - hit.at < 20000) {
+  const age = hit ? Date.now() - hit.at : Infinity;
+  if (hit && (fresh ? age < FRESH_FLOOR_MS : age < CACHE_MS)) {
     res.setHeader('x-cache', 'hit');
     return res.status(200).json(hit.payload);
   }
@@ -176,32 +257,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const chunks = await Promise.all(roster.map(b =>
-      queryBoard(b).catch(e => ({ __err: b.creator + ' — ' + e.message }))
-    ));
-    const videos = [];
-    const problems = [];
-    for (const c of chunks) {
-      if (c && c.__err) problems.push(c.__err); else videos.push(...c);
+    let p = inflight.get(ckey);
+    if (!p) {
+      p = sync(roster, ckey).finally(() => inflight.delete(ckey));
+      inflight.set(ckey, p);
     }
-    const vocab = {};
-    for (const v of videos) for (const t of (v.tags || [])) vocab[t] = (vocab[t] || 0) + 1;
-
-    const payload = {
-      videos,
-      tagVocab: Object.entries(vocab).sort((a, b) => b[1] - a[1]).slice(0, 60),
-      rates: measureRates(videos, roster),
-      creators: roster.map(b => b.creator),
-      formats: Object.fromEntries(roster.map(b => [b.creator, b.format || 'Short'])),
-      builtIn: BOARDS.map(b => b.creator),
-      problems,
-      syncedAt: new Date().toISOString()
-    };
-    if (cache.size > 12) cache.clear();
-    cache.set(ckey, { at: Date.now(), payload });
+    const payload = await p;
     res.setHeader('x-cache', 'miss');
     return res.status(200).json(payload);
   } catch (e) {
+    if (hit) return res.status(200).json(hit.payload);
     return res.status(500).json({ error: String(e && e.message || e) });
   }
 }
