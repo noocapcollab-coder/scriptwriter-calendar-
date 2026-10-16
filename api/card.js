@@ -10,7 +10,7 @@
 // the old ones are removed, so a failure part-way leaves a duplicate, never a
 // blank page.
 
-import { NOTION, headers, loadRosterCard } from './_boards.js';
+import { NOTION, headers, loadRosterCard, notionFetch } from './_boards.js';
 
 const TEXT_TYPES = {
   paragraph: '', heading_1: '# ', heading_2: '## ', heading_3: '### ',
@@ -27,7 +27,7 @@ async function childrenOf(id) {
   let cursor;
   do {
     const u = `${NOTION}/blocks/${id}/children?page_size=100` + (cursor ? `&start_cursor=${cursor}` : '');
-    const r = await fetch(u, { headers: headers() });
+    const r = await notionFetch(u, { headers: headers() });
     const j = await r.json();
     if (!r.ok) throw Object.assign(new Error(j.message || `Notion returned ${r.status}`), { status: r.status });
     out.push(...(j.results || []));
@@ -83,7 +83,7 @@ async function readCard(id, query) {
   if (sKey) {
     const p = props[sKey];
     status = p.type === 'status' ? (p.status && p.status.name) : (p.select && p.select.name);
-    const sr = await fetch(`${NOTION}/data_sources/${ds}`, { headers: headers() });
+    const sr = await notionFetch(`${NOTION}/data_sources/${ds}`, { headers: headers() });
     const sj = await sr.json().catch(() => ({}));
     const def = ((sj.properties || {})[sKey]) || {};
     statusOptions = ((def.status && def.status.options) || (def.select && def.select.options) || []).map(o => o.name);
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
       if (!c.sKey) return res.status(422).json({ error: 'That card has no status column' });
       if (!c.statusOptions.includes(body.status)) return res.status(400).json({ error: `"${body.status}" is not a status on that board` });
       const type = c.page.properties[c.sKey].type;
-      const r = await fetch(`${NOTION}/pages/${c.hex}`, {
+      const r = await notionFetch(`${NOTION}/pages/${c.hex}`, {
         method: 'PATCH', headers: headers(),
         body: JSON.stringify({ properties: { [c.sKey]: type === 'status' ? { status: { name: body.status } } : { select: { name: body.status } } } })
       });
@@ -131,14 +131,14 @@ export default async function handler(req, res) {
       const fresh = body.body.length > 50000 ? null : toBlocks(body.body.replace(/\n+$/, ''));
       if (!fresh) return res.status(400).json({ error: 'That script is too long to save from here' });
       for (let i = 0; i < fresh.length; i += 100) {
-        const r = await fetch(`${NOTION}/blocks/${c.hex}/children`, {
+        const r = await notionFetch(`${NOTION}/blocks/${c.hex}/children`, {
           method: 'PATCH', headers: headers(), body: JSON.stringify({ children: fresh.slice(i, i + 100) })
         });
         const j = await r.json();
         if (!r.ok) return res.status(r.status).json({ error: (j && j.message) || `Notion returned ${r.status}` });
       }
       for (const b of c.blocks) {
-        await fetch(`${NOTION}/blocks/${b.id}`, { method: 'DELETE', headers: headers() });
+        await notionFetch(`${NOTION}/blocks/${b.id}`, { method: 'DELETE', headers: headers() });
       }
       done.body = true;
     }
