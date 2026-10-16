@@ -5,14 +5,14 @@
 // If a column can't be found the request fails with a message naming what was
 // missing rather than writing a half-filled card.
 
-import { NOTION, headers, rosterFor, resolveDs } from './_boards.js';
+import { NOTION, headers, rosterFor, resolveDs, notionFetch } from './_boards.js';
 
 const schemaCache = new Map();
 
 async function schemaOf(ds) {
   const hit = schemaCache.get(ds);
   if (hit && Date.now() - hit.at < 300000) return hit.props;
-  const r = await fetch(`${NOTION}/data_sources/${ds}`, { headers: headers() });
+  const r = await notionFetch(`${NOTION}/data_sources/${ds}`, { headers: headers() });
   if (!r.ok) throw new Error(`could not read board schema (${r.status})`);
   const j = await r.json();
   const props = j.properties || {};
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       ? { select: { name: t.option } }
       : { multi_select: [{ name: t.option }] };
 
-    const r = await fetch(`${NOTION}/pages`, {
+    const r = await notionFetch(`${NOTION}/pages`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({
