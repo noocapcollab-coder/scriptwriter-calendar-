@@ -1,7 +1,7 @@
 // api/rename.js — renames a card on a creator's board. Takes { id, title }.
 // The title column is found by type, since names differ per board.
 
-import { NOTION, headers, loadRosterCard } from './_boards.js';
+import { NOTION, headers, loadRosterCard, notionFetch } from './_boards.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     const titleKey = Object.keys(props).find(k => props[k] && props[k].type === 'title');
     if (!titleKey) return res.status(422).json({ error: 'That card has no title column' });
 
-    const r = await fetch(`${NOTION}/pages/${hex}`, {
+    const r = await notionFetch(`${NOTION}/pages/${hex}`, {
       method: 'PATCH', headers: headers(),
       body: JSON.stringify({ properties: { [titleKey]: { title: [{ text: { content: title } }] } } })
     });
