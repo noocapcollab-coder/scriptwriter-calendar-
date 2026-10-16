@@ -26,6 +26,39 @@ export const BOARDS = [
   { creator: 'David Iya', ds: '898508e9-9dda-8383-ad90-070f01618f5a', format: 'Short', dateProp: 'DUE DATE' }
 ];
 
+// Notion allows an integration about 3 requests a second, shared with every
+// n8n workflow using the same token. Every call in this project goes through
+// notionFetch, which spaces calls out and, when Notion answers 429 (rate
+// limited) or a 5xx blip, waits as long as Notion asks and tries again.
+const GAP_MS = 380;
+const MAX_TRIES = 5;
+let nextSlot = 0;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function slot() {
+  const now = Date.now();
+  const at = Math.max(now, nextSlot);
+  nextSlot = at + GAP_MS;
+  if (at > now) await sleep(at - now);
+}
+
+export async function notionFetch(url, opts = {}) {
+  let wait = 1000;
+  for (let i = 1; ; i++) {
+    await slot();
+    const r = await fetch(url, opts);
+    const retryable = r.status === 429 || r.status === 502 || r.status === 503 || r.status === 504;
+    if (!retryable || i >= MAX_TRIES) return r;
+    const ra = parseFloat(r.headers.get('retry-after'));
+    const ms = Number.isFinite(ra) ? ra * 1000 : wait;
+    // Push the shared queue back too, so other calls don't pile straight in.
+    nextSlot = Math.max(nextSlot, Date.now() + ms);
+    await sleep(ms);
+    wait = Math.min(wait * 2, 8000);
+  }
+}
+
 export function headers() {
   return {
     'Authorization': 'Bearer ' + process.env.NOTION_TOKEN,
@@ -79,13 +112,13 @@ export async function resolveDs(id, creator) {
   const hit = dsCache.get(id);
   if (hit) return hit;
 
-  const direct = await fetch(`${NOTION}/data_sources/${id}`, { headers: headers() });
+  const direct = await notionFetch(`${NOTION}/data_sources/${id}`, { headers: headers() });
   if (direct.ok) { dsCache.set(id, id); return id; }
 
   // Might be a database id. Only take it if it actually names a data source —
   // a page id can come back 200 here with nothing useful on it, so a miss
   // falls through to the page walk rather than giving up.
-  const asDb = await fetch(`${NOTION}/databases/${id}`, { headers: headers() });
+  const asDb = await notionFetch(`${NOTION}/databases/${id}`, { headers: headers() });
   if (asDb.ok) {
     const j = await asDb.json().catch(() => ({}));
     const first = (j.data_sources || [])[0];
@@ -94,7 +127,7 @@ export async function resolveDs(id, creator) {
 
   // Otherwise treat it as a dashboard page and look inside for a board,
   // preferring one whose title mentions REELS.
-  const probe = await fetch(`${NOTION}/blocks/${id}/children?page_size=1`, { headers: headers() });
+  const probe = await notionFetch(`${NOTION}/blocks/${id}/children?page_size=1`, { headers: headers() });
   if (!probe.ok) {
     throw new Error(probe.status === 404
       ? 'the integration cannot see that page or board — open it in Notion, ' +
@@ -126,7 +159,7 @@ export async function resolveDs(id, creator) {
 async function databaseInsidePage(pageId, depth = 0, seen = new Set()) {
   if (depth > 3 || seen.has(pageId)) return null;
   seen.add(pageId);
-  const r = await fetch(`${NOTION}/blocks/${pageId}/children?page_size=100`, { headers: headers() });
+  const r = await notionFetch(`${NOTION}/blocks/${pageId}/children?page_size=100`, { headers: headers() });
   if (!r.ok) return null;
   const j = await r.json();
   const blocks = j.results || [];
@@ -163,7 +196,7 @@ async function databaseInsidePage(pageId, depth = 0, seen = new Set()) {
 // integration is searchable, so this finds boards a dashboard only links to.
 async function findBoardByName(creator) {
   if (!creator) return null;
-  const r = await fetch(`${NOTION}/search`, {
+  const r = await notionFetch(`${NOTION}/search`, {
     method: 'POST', headers: headers(),
     body: JSON.stringify({ query: `${creator} REELS`, page_size: 20 })
   });
@@ -191,14 +224,20 @@ export async function loadRosterCard(id, query) {
   const hex = String(id || '').replace(/-/g, '').toLowerCase();
   if (!/^[0-9a-f]{32}$/.test(hex)) throw Object.assign(new Error('Bad card id'), { status: 400 });
 
-  const pr = await fetch(`${NOTION}/pages/${hex}`, { headers: headers() });
+  const pr = await notionFetch(`${NOTION}/pages/${hex}`, { headers: headers() });
   const page = await pr.json().catch(() => ({}));
   if (!pr.ok) throw Object.assign(new Error((page && page.message) || `Notion returned ${pr.status}`), { status: pr.status });
 
   const parent = page.parent || {};
   const parentIds = [parent.data_source_id, parent.database_id]
     .filter(Boolean).map(x => String(x).replace(/-/g, ''));
-  for (const b of rosterFor(query || {})) {
+  const roster = rosterFor(query || {});
+  // Built-in ids are usually the data source itself, so check them first
+  // and only resolve (extra Notion calls) when nothing matched.
+  for (const b of roster) {
+    if (parentIds.includes(String(b.ds).replace(/-/g, ''))) return { page, ds: b.ds, hex };
+  }
+  for (const b of roster) {
     try {
       const ds = await resolveDs(b.ds, b.creator);
       if (parentIds.includes(String(ds).replace(/-/g, ''))) return { page, ds, hex };
