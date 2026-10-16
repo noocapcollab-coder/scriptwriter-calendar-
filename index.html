@@ -338,14 +338,22 @@ async function load(fresh){
     document.getElementById('hsub').textContent=
       'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · '+
       V.filter(stale).length+' stuck past their post date · synced '+
-      new Date(j.syncedAt).toLocaleTimeString('en-GB');
+      new Date(j.syncedAt).toLocaleTimeString('en-GB')+
+      ((j.stale&&j.stale.length)?' · '+j.stale.join(', ')+' from last sync':'');
     showBanner((j.problems&&j.problems.length)?('Some boards did not load — '+j.problems.join(' · ')):'');
     render();
+    failStreak=0;
   }catch(e){
-    showBanner('Could not reach Notion — '+e.message+'. Retrying in 20s.');
-    setTimeout(function(){load(true)},20000);
+    // Back off 30s, 60s, 120s… and don't force a fresh sync, so a busy Notion
+    // isn't hammered by every open tab retrying at once.
+    failStreak++;
+    var wait=Math.min(30*Math.pow(2,failStreak-1),300);
+    showBanner('Could not reach Notion — '+e.message+'. Retrying in '+wait+'s.');
+    clearTimeout(retryT);
+    retryT=setTimeout(function(){load(false)},wait*1000);
   }
 }
+var failStreak=0, retryT=null;
 
 function dayName(x){return x.toLocaleDateString('en-GB',{weekday:'long'})}
 function shortDay(x){return x.toLocaleDateString('en-GB',{weekday:'short',day:'numeric'})}
@@ -844,7 +852,12 @@ document.getElementById('vpost').onclick=function(){calMode='post';this.classLis
 document.getElementById('vdue').onclick=function(){calMode='due';this.classList.add('on');document.getElementById('vpost').classList.remove('on');renderCal()};
 
 load(false);
-setInterval(function(){ if(!saving) load(false) }, 30000);
+// Poll once a minute, and only while the tab is visible. Coming back to the
+// tab pulls straight away.
+setInterval(function(){ if(!saving&&!document.hidden&&!failStreak) load(false) }, 60000);
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&!saving&&!failStreak) load(false);
+});
 </script>
 </body>
 </html>
