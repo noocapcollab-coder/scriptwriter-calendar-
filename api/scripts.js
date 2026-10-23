@@ -8,6 +8,7 @@
 // mentions "post" (falling back to any date property).
 
 import { NOTION, BOARDS, headers, rosterFor, resolveDs, notionFetch } from './_boards.js';
+import { snapshotRows } from './_snapshot.js';
 
 // Leave a creator out to measure their rate from the last 4 weeks of posts.
 // Put a number here to pin it instead (contracted output, new creator, etc).
@@ -119,7 +120,39 @@ async function errorOf(r) {
   return new Error(msg);
 }
 
-async function queryBoard(board) {
+function toVideo(page, board) {
+  if (page.archived || page.in_trash) return null;
+      const props = page.properties || {};
+      const label = (() => {
+        const s = findStatus(props);
+        if (!s) return null;
+        return s.status ? s.status.name : (s.select ? s.select.name : null);
+      })();
+      const stage = stageOf(label);
+      if (stage === null || stage === 'archive') return null;
+      const title = titleOf(props);
+      if (!title) return null;
+      const tags = tagsOf(props);
+      return {
+        id: page.id,
+        creator: board.creator,
+        title,
+        stage,
+        stageLabel: label,
+        kind: findKind(tags),
+        format: findFormat(tags) || board.format || 'Short',
+        tags,
+        postDate: findPostDate(props, board.dateProp)
+      };
+}
+
+async function queryBoard(board, fresh) {
+  // The shared snapshot already has this board: use it and leave Notion alone (an edit's fresh pull skips it)
+  const snap = fresh ? null : await snapshotRows(board.ds);
+  if (snap) {
+    const since = Date.now() - WINDOW_DAYS * 864e5;
+    return snap.filter((p) => Date.parse(p.last_edited_time) >= since).map((p) => toVideo(p, board)).filter(Boolean);
+  }
   const out = [];
   let ds = goodDs.get(board.ds) || board.ds;
   let r = await queryPage(ds);
@@ -131,31 +164,7 @@ async function queryBoard(board) {
     if (!r.ok) throw await errorOf(r);
     goodDs.set(board.ds, ds);
     const j = await r.json();
-    for (const page of j.results || []) {
-      if (page.archived || page.in_trash) continue;
-      const props = page.properties || {};
-      const label = (() => {
-        const s = findStatus(props);
-        if (!s) return null;
-        return s.status ? s.status.name : (s.select ? s.select.name : null);
-      })();
-      const stage = stageOf(label);
-      if (stage === null || stage === 'archive') continue;
-      const title = titleOf(props);
-      if (!title) continue;
-      const tags = tagsOf(props);
-      out.push({
-        id: page.id,
-        creator: board.creator,
-        title,
-        stage,
-        stageLabel: label,
-        kind: findKind(tags),
-        format: findFormat(tags) || board.format || 'Short',
-        tags,
-        postDate: findPostDate(props, board.dateProp)
-      });
-    }
+    for (const page of j.results || []) { const v = toVideo(page, board); if (v) out.push(v); }
     if (!j.has_more) break;
     r = await queryPage(ds, j.next_cursor);
   }
@@ -194,13 +203,13 @@ const inflight = new Map();
 const FRESH_FLOOR_MS = 8000;
 const CACHE_MS = 30000;
 
-async function sync(roster, ckey) {
+async function sync(roster, ckey, fresh) {
   const chunks = [];
   // One board at a time: notionFetch spaces the calls, and running boards in
   // parallel only creates bursts that trip the limit.
   for (const b of roster) {
     try {
-      const videos = await queryBoard(b);
+      const videos = await queryBoard(b, fresh);
       lastGood.set(b.ds, { at: Date.now(), videos });
       chunks.push({ videos });
     } catch (e) {
@@ -259,7 +268,7 @@ export default async function handler(req, res) {
   try {
     let p = inflight.get(ckey);
     if (!p) {
-      p = sync(roster, ckey).finally(() => inflight.delete(ckey));
+      p = sync(roster, ckey, fresh).finally(() => inflight.delete(ckey));
       inflight.set(ckey, p);
     }
     const payload = await p;
