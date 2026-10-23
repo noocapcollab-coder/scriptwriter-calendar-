@@ -146,9 +146,11 @@ function toVideo(page, board) {
       };
 }
 
+let readFrom = 'notion';
 async function queryBoard(board, fresh) {
   // The shared snapshot already has this board: use it and leave Notion alone (an edit's fresh pull skips it)
   const snap = fresh ? null : await snapshotRows(board.ds);
+  readFrom = snap ? 'snapshot' : 'notion';
   if (snap) {
     const since = Date.now() - WINDOW_DAYS * 864e5;
     return snap.filter((p) => Date.parse(p.last_edited_time) >= since).map((p) => toVideo(p, board)).filter(Boolean);
@@ -235,7 +237,8 @@ async function sync(roster, ckey, fresh) {
     builtIn: BOARDS.map(b => b.creator),
     problems,
     stale,
-    syncedAt: new Date().toISOString()
+    syncedAt: new Date().toISOString(),
+    readFrom
   };
   if (cache.size > 12) cache.clear();
   cache.set(ckey, { at: Date.now(), payload });
