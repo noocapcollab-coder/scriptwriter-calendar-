@@ -36,6 +36,15 @@ h1{font-size:23px;font-weight:600;margin:0}
 .kpi .lab{font-size:11.5px;color:var(--tx3)}
 .kpi .val{font-size:31px;font-weight:600;margin-top:5px;line-height:1}
 .risk{border-color:rgba(241,107,107,.35)}
+.kpi .hint{font-size:11.5px;color:var(--tx3);margin-top:7px;line-height:1.4}
+.lead{color:var(--tx2);font-size:13px;margin-top:3px}
+.meta{color:var(--tx3);font-size:11.5px;margin-top:4px}
+.goal{display:flex;align-items:center;gap:8px;color:var(--tx2);font-size:12.5px}
+.subhd{font-size:11.5px;color:var(--tx3);padding:9px 16px 3px;letter-spacing:.03em;text-transform:uppercase}
+.more{display:block;width:100%;border:0;border-top:1px solid var(--line);border-radius:0;padding:9px 16px;
+  text-align:left;font-size:12.5px;color:var(--tx2)}
+.stat{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:12.5px;color:var(--tx2)}
+.stat b{color:var(--tx);font-weight:500}
 .sec{margin-top:26px}
 .sechd{font-size:12.5px;color:var(--tx3);margin:0 0 10px}
 .crow{display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -129,12 +138,16 @@ select.field{cursor:pointer}
 <div class="between">
   <div>
     <h1>Scripts</h1>
-    <div class="sub" id="hsub">loading boards…</div>
+    <div class="lead">What the script team should write next, and which scripts are late.</div>
+    <div class="meta" id="hsub">loading boards…</div>
   </div>
-  <div class="row">
-    <span class="sub">hold</span>
-    <input type="range" id="cush" min="1" max="4" step="0.5" value="1">
-    <span style="font-weight:500;min-width:74px" id="cushlab">1 week</span>
+  <div class="row" style="flex-wrap:wrap">
+    <label class="goal" for="cush">Keep every creator
+      <select class="field" id="cush" style="padding:5px 8px">
+        <option value="1">1 week</option><option value="1.5">1.5 weeks</option>
+        <option value="2">2 weeks</option><option value="3">3 weeks</option><option value="4">4 weeks</option>
+      </select> ahead</label>
+    <span id="cushlab" style="display:none"></span>
     <button id="rosterbtn">Creators</button>
     <button id="reload">Reload</button>
   </div>
@@ -145,17 +158,20 @@ select.field{cursor:pointer}
 <div class="card" id="session" style="overflow:hidden;margin-bottom:18px"></div>
 
 <div class="kpis">
-  <div class="kpi"><div class="lab" id="k1lab">Left this week</div><div class="val" id="k1">—</div>
-    <div class="sub" style="margin-top:3px">personal only</div></div>
-  <div class="kpi"><div class="lab">Posting next week</div><div class="val" id="k2">—</div></div>
-  <div class="kpi"><div class="lab">To write this week</div><div class="val" id="k3" style="color:var(--blue)">—</div></div>
-  <div class="kpi risk"><div class="lab">Locked dates, no script</div><div class="val" id="k4" style="color:var(--red)">—</div></div>
+  <div class="kpi risk"><div class="lab">Late scripts</div><div class="val" id="k4" style="color:var(--red)">—</div>
+    <div class="hint">Script deadline has passed and there's still no approved script</div></div>
+  <div class="kpi"><div class="lab">Scripts to write this week</div><div class="val" id="k3" style="color:var(--blue)">—</div>
+    <div class="hint" id="k3hint">So every creator stays 1 week ahead</div></div>
+  <div class="kpi"><div class="lab" id="k1lab">Still posting this week</div><div class="val" id="k1">—</div>
+    <div class="hint">Personal videos with a post date from today to Sunday</div></div>
+  <div class="kpi"><div class="lab">Posting next week</div><div class="val" id="k2">—</div>
+    <div class="hint">Personal videos with a post date next week</div></div>
 </div>
 
 <div class="card risk" id="riskbox" style="overflow:hidden"></div>
 
 <div class="sec">
-  <p class="sechd">By creator</p>
+  <p class="sechd">Each creator · how many scripts are ready, and how many to write</p>
   <div class="dec" id="dec"></div>
 </div>
 
@@ -168,8 +184,9 @@ select.field{cursor:pointer}
       <button id="mn">&rsaquo;</button>
       <button id="mtoday">Today</button>
       <span style="width:10px"></span>
-      <button id="vpost" class="on">Post dates</button>
-      <button id="vdue">Script due</button>
+      <span class="sub">Show by</span>
+      <button id="vpost" class="on">Post date</button>
+      <button id="vdue">Script deadline</button>
     </div>
   </div>
   <div class="legend">
@@ -177,7 +194,7 @@ select.field{cursor:pointer}
     <span><span class="dot" style="background:var(--amber);display:inline-block;margin-right:7px"></span>in scripting</span>
     <span><span class="dot" style="background:var(--red);display:inline-block;margin-right:7px"></span>not started</span>
     <span><span class="dot prov" style="color:var(--tx2);display:inline-block;margin-right:7px"></span>sponsor, date provisional</span>
-    <span><span class="dot done" style="background:var(--tx3);display:inline-block;margin-right:7px"></span>past scripting</span>
+    <span><span class="dot done" style="background:var(--tx3);display:inline-block;margin-right:7px"></span>already filmed or editing</span>
     <span id="duenote" style="display:none">Mon&ndash;Wed posts are due Friday, Thu&ndash;Sat posts are due Wednesday</span>
   </div>
   <div class="filters" id="filters"></div>
@@ -187,7 +204,7 @@ select.field{cursor:pointer}
 </div>
 
 <div class="sec">
-  <button id="hkbtn">Housekeeping</button>
+  <button id="hkbtn">Board clean-up</button>
   <div class="card" id="hk" style="display:none;overflow:hidden;margin-top:12px"></div>
 </div>
 
@@ -206,8 +223,9 @@ var DONE_FROM=8;
 // "Personal only" hides sponsors below this stage. At To Post it is committed.
 var SPON_COMMIT=10;
 function isDone(v){return v.stage>=DONE_FROM}
-var calMode='post', who='all', saving=false, onlyPersonal=false;
+var calMode='post', who='all', saving=false, onlyPersonal=false, showAllLate=false;
 var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||1;
+if([1,1.5,2,3,4].indexOf(cushion)<0) cushion=cushion<2.5?2:(cushion<3.5?3:4);
 var BUILTIN=[], FORMATS={};
 
 function readLS(k,fb){try{var v=JSON.parse(localStorage.getItem(k));return v||fb}catch(e){return fb}}
@@ -336,9 +354,8 @@ async function load(fresh){
     BUILTIN=j.builtIn||[]; FORMATS=j.formats||{};
     renderRoster();
     document.getElementById('hsub').textContent=
-      'planning week of '+dmy(nextWeek)+' · '+V.length+' videos · '+
-      V.filter(stale).length+' stuck past their post date · synced '+
-      new Date(j.syncedAt).toLocaleTimeString('en-GB')+
+      'Updated '+new Date(j.syncedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+
+      ' · '+V.length+' videos across '+CREATORS.length+' creators'+
       ((j.stale&&j.stale.length)?' · '+j.stale.join(', ')+' from last sync':'');
     showBanner((j.problems&&j.problems.length)?('Some boards did not load — '+j.problems.join(' · ')):'');
     render();
@@ -370,11 +387,11 @@ function renderSession(){
   if(ses.kind==='topics'){
     var rows=CREATORS.map(function(c){return {c:c,n:bankOf(c)}}).sort(function(a,b){return a.n-b.n});
     var total=rows.reduce(function(a,x){return a+x.n},0);
-    box.innerHTML='<div class="chd"><span class="name">Add topics to the bank</span>'+
+    box.innerHTML='<div class="chd"><span class="name">Today\'s job: add new video ideas</span>'+
       '<span class="sub">'+when+'</span></div>'+
       '<div style="padding:13px 16px">'+
         '<div style="font-size:26px;font-weight:600;line-height:1">'+total+'</div>'+
-        '<div class="sub" style="margin-bottom:11px">ideas sitting at stage 1 across the roster</div>'+
+        '<div class="sub" style="margin-bottom:11px">ideas waiting to be scripted, across all creators. Fill up the creators with the fewest.</div>'+
         rows.map(function(r){
           return '<div class="crow" style="padding:6px 0"><span>'+esc(r.c)+'</span>'+
           '<span class="chip '+(r.n?(r.n<3?'c-a':'c-g'):'c-r')+'">'+r.n+' idea'+(r.n===1?'':'s')+'</span></div>';
@@ -386,26 +403,31 @@ function renderSession(){
   var scope=onDates(ses.covers);
   var todo=scope.filter(function(v){return v.stage<5});
   var cov=ses.covers.map(shortDay).join(', ');
-  box.innerHTML='<div class="chd"><span class="name">Script for '+cov+'</span>'+
+  var doneN=scope.length-todo.length;
+  box.innerHTML='<div class="chd"><span class="name">'+(isToday?'Today\'s job':'Next job')+
+    ': write scripts for videos posting '+cov+'</span>'+
     '<span class="sub">'+when+'</span></div>'+
     '<div style="padding:13px 16px '+(todo.length?'4px':'14px')+'">'+
       '<div style="font-size:26px;font-weight:600;line-height:1;color:'+
-        (todo.length?'var(--amber)':'var(--green)')+'">'+todo.length+'</div>'+
-      '<div class="sub">to write, out of '+scope.length+' posting those days</div>'+
+        (todo.length?'var(--amber)':'var(--green)')+'">'+todo.length+
+        ' <span style="font-size:14px;font-weight:500">script'+(todo.length===1?'':'s')+' to write</span></div>'+
+      '<div class="sub">'+scope.length+' video'+(scope.length===1?' posts':'s post')+' on those days, '+
+        doneN+' already '+(doneN===1?'has a script':'have scripts')+(todo.length?'':'. All done')+'</div>'+
     '</div>'+
     todo.map(function(v){
       return '<div class="crow">'+
         '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
         '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
         '<span style="white-space:nowrap">'+kindChip(v)+
-        '<span class="chip c-'+tone(v.stage)+'">'+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span></span>'+
+        '<span class="chip c-n" style="margin-right:6px">now: '+esc(label(v.stage))+'</span>'+
+        '<span class="chip c-'+tone(v.stage)+'">posts '+shortDay(pdate(v))+'</span></span>'+
       '</div>';
     }).join('');
 }
 
 function render(){
-  document.getElementById('cush').value=cushion;
-  document.getElementById('cushlab').textContent=cushion+' week'+(cushion==1?'':'s');
+  document.getElementById('cush').value=String(cushion);
+  document.getElementById('k3hint').textContent='So every creator stays '+cushion+' week'+(cushion==1?'':'s')+' ahead';
 
   var tw=0,nw=0;
   CREATORS.forEach(function(c){
@@ -418,22 +440,34 @@ function render(){
     .sort(function(a,b){return pdate(a)-pdate(b)});
 
   document.getElementById('k1lab').textContent=
-    (restDays>1?'Left this week':'Posting today')+' · '+span(restFrom,restTo);
+    (restDays>1?'Still posting this week':'Posting today')+' · '+span(restFrom,restTo);
   document.getElementById('k1').textContent=tw;
   document.getElementById('k2').textContent=nw;
   document.getElementById('k3').textContent=ahead;
   document.getElementById('k4').textContent=risk.length;
 
+  // Split the late list: ones still coming up can be saved, ones whose post
+  // date has already gone by need a new date (or archiving).
+  var soon=risk.filter(function(v){return pdate(v)>=TODAY});
+  var gone=risk.filter(function(v){return pdate(v)<TODAY});
+  function daysAgo(v){var n=Math.round((TODAY-pdate(v))/864e5);return n===1?'yesterday':n+' days ago'}
+  function riskRow(v,chip){return '<div class="crow" style="border-top-color:rgba(241,107,107,.14)">'+
+    '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
+    esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
+    '<span style="white-space:nowrap">'+kindChip(v)+
+    '<span class="chip c-n" style="margin-right:6px">stuck at: '+esc(label(v.stage))+'</span>'+chip+'</span></div>'}
+  var SHOW=5;
   document.getElementById('riskbox').innerHTML = risk.length
     ? '<div class="chd" style="background:transparent;border-bottom:1px solid rgba(241,107,107,.22)">'+
-      '<span class="name" style="color:var(--red)">Script already overdue against its post date</span>'+
-      '<span class="sub">'+risk.length+'</span></div>'+
-      risk.map(function(v){return '<div class="crow" style="border-top-color:rgba(241,107,107,.14)">'+
-        '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
-        esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
-        '<span style="white-space:nowrap">'+kindChip(v)+
-        '<span class="chip c-r">posts '+dmy(pdate(v))+' · '+esc(label(v.stage))+'</span></span></div>'}).join('')
-    : '<div class="empty">Nothing has blown its script deadline.</div>';
+      '<span class="name" style="color:var(--red)">Late scripts</span>'+
+      '<span class="sub">'+risk.length+' video'+(risk.length===1?'':'s')+' missed the script deadline</span></div>'+
+      (soon.length?'<div class="subhd">Still posting soon · write these first</div>'+
+        soon.map(function(v){return riskRow(v,'<span class="chip c-r">posts '+shortDay(pdate(v))+'</span>')}).join(''):'')+
+      (gone.length?'<div class="subhd">Post date already passed · give it a new date or archive it</div>'+
+        gone.map(function(v,i){return (i===SHOW&&!showAllLate?'<button class="more" id="lmore">Show '+(gone.length-SHOW)+' more</button>':'')+
+          ((i<SHOW||showAllLate)?riskRow(v,'<span class="chip c-r">was due '+dmy(pdate(v))+' · '+daysAgo(v)+'</span>'):'')}).join(''):'')
+    : '<div class="empty">No late scripts. Everything is on track.</div>';
+  var lm=document.getElementById('lmore'); if(lm) lm.onclick=function(){showAllLate=true;render()};
 
   document.getElementById('dec').innerHTML=CREATORS.map(function(c){
     var need=needFor(c), hand=inHand(c), wk=coversWeeks(c), bank=bankOf(c);
@@ -443,7 +477,7 @@ function render(){
       .sort(function(a,b){return dueOf(a)-dueOf(b)});
 
     var dated=open.length?'<div style="border-top:1px solid var(--line);margin-top:11px;padding-top:9px">'+
-      '<div class="sub" style="margin-bottom:4px">Dated but not scripted</div>'+
+      '<div class="sub" style="margin-bottom:4px">Has a post date, needs a script</div>'+
       open.map(function(v){
         var due=dueOf(v), late=due<TODAY;
         return '<div class="between" style="gap:8px;padding:3px 0">'+
@@ -457,26 +491,27 @@ function render(){
       '<div class="chd"><span class="name">'+esc(c)+
         '<span class="k '+((FORMATS[c]||'Short')==='Long'?'k-l':'k-sh')+'" style="margin-left:9px">'+
         esc(FORMATS[c]||'Short')+'</span></span>'+
-        '<span class="sub">posts '+rateOf(c)+'/wk</span></div>'+
+        '<span class="sub">posts about '+rateOf(c)+' a week</span></div>'+
       '<div style="padding:13px 16px 14px">'+
         '<div class="between" style="align-items:flex-end">'+
           '<div>'+
             '<div style="font-size:30px;font-weight:600;line-height:1;color:'+
               (need?'var(--amber)':'var(--green)')+'">'+need+'</div>'+
-            '<div class="sub">to write this week</div>'+
+            '<div class="sub">'+(need?'script'+(need===1?'':'s')+' to write this week':'nothing to write, ahead already')+'</div>'+
           '</div>'+
           '<div style="text-align:right">'+
-            '<div style="font-size:15px;font-weight:500">'+hand+' ahead</div>'+
-            '<div class="sub">'+(hand?'personal, in production · '+wk.toFixed(1)+' wks':'nothing scripted ahead')+
+            '<div style="font-size:15px;font-weight:500">'+hand+' ready</div>'+
+            '<div class="sub">'+(hand?'covers about '+wk.toFixed(1)+' wk'+(wk.toFixed(1)==='1.0'?'':'s')+' of posts':'no scripts ready yet')+
               (sponAhead(c)?' <span style="color:#93aaff">+'+sponAhead(c)+' sponsor</span>':'')+'</div>'+
           '</div>'+
         '</div>'+
-        '<div class="meter" style="margin:12px 0 0"><i style="width:'+
+        '<div class="meter" style="margin:12px 0 4px" title="Scripts ready vs your goal of '+cushion+' week'+(cushion==1?'':'s')+' ahead"><i style="width:'+
           Math.min(100,Math.round(wk/cushion*100))+'%;background:'+
           (need?'var(--amber)':'var(--green)')+'"></i></div>'+
+        '<div class="sub">'+Math.min(100,Math.round(wk/cushion*100))+'% of the '+cushion+'-week goal</div>'+
         dated+
         '<div class="between" style="border-top:1px solid var(--line);margin-top:10px;padding-top:9px">'+
-          '<span class="sub">Topic bank</span>'+
+          '<span class="sub">Ideas waiting to be scripted</span>'+
           '<span style="font-size:14px;font-weight:500;color:'+
             (bank?(bank<3?'var(--amber)':'var(--green)'):'var(--red)')+'">'+bank+'</span>'+
         '</div>'+
@@ -546,8 +581,8 @@ function renderCal(){
   document.getElementById('daypanel').innerHTML=
     '<div class="chd"><span class="name">'+fmt(selDay)+back+'</span><span class="sub">'+
     (sel.length?sel.length+' '+lab+' · '+sel.filter(function(v){return v.kind==='Sponsor'}).length+
-      ' sponsor · '+sel.filter(function(v){return !isDone(v)&&v.stage<5}).length+' unscripted'+
-      (sel.filter(isDone).length?' · '+sel.filter(isDone).length+' past scripting':'')
+      ' sponsor · '+sel.filter(function(v){return !isDone(v)&&v.stage<5}).length+' still need a script'+
+      (sel.filter(isDone).length?' · '+sel.filter(isDone).length+' already filmed or editing':'')
       :'nothing '+lab)+
     '</span></div>'+
     (sel.length?sel.map(function(v){return '<div class="crow'+(isDone(v)?' done':'')+'">'+
@@ -806,16 +841,16 @@ function renderRoster(){
 function renderHK(){
   var box=document.getElementById('hk');
   box.innerHTML='<div class="chd"><span class="name">Board tidy-up</span>'+
-    '<span class="sub">not part of this week\'s work</span></div>'+
+    '<span class="sub">tidy-up, not urgent</span></div>'+
     '<div style="padding:11px 16px 14px">'+
-      '<div class="sub" style="margin-bottom:9px">Stuck means the post date has gone by and the '+
-      'card never reached posted. Undated means the script is written with no slot booked.</div>'+
+      '<div class="sub" style="margin-bottom:9px">Old date: the post date has passed but the card was '+
+      'never marked posted. No date: the script is written but no post date is set.</div>'+
       CREATORS.map(function(c){
         var st=staleOf(c), u=undated(c);
         return '<div class="crow" style="padding:7px 0"><span>'+esc(c)+'</span>'+
           '<span style="white-space:nowrap">'+
-            '<span class="chip '+(st?'c-a':'c-n')+'" style="margin-right:6px">'+st+' stuck</span>'+
-            '<span class="chip c-n">'+u+' undated</span>'+
+            '<span class="chip '+(st?'c-a':'c-n')+'" style="margin-right:6px">'+st+' old date</span>'+
+            '<span class="chip c-n">'+u+' no date</span>'+
           '</span></div>';
       }).join('')+
     '</div>';
@@ -828,7 +863,7 @@ document.getElementById('hkbtn').onclick=function(){
   this.classList.toggle('on',!open);
 };
 
-document.getElementById('cush').oninput=function(){
+document.getElementById('cush').onchange=function(){
   cushion=+this.value;
   try{localStorage.setItem('noocap_scripts_cushion',cushion)}catch(e){}
   render();
