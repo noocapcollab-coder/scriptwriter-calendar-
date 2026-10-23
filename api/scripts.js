@@ -8,7 +8,7 @@
 // mentions "post" (falling back to any date property).
 
 import { NOTION, BOARDS, headers, rosterFor, resolveDs, notionFetch } from './_boards.js';
-import { snapshotRows } from './_snapshot.js';
+import { snapshotRows, snapWhy } from './_snapshot.js';
 
 // Leave a creator out to measure their rate from the last 4 weeks of posts.
 // Put a number here to pin it instead (contracted output, new creator, etc).
@@ -238,7 +238,8 @@ async function sync(roster, ckey, fresh) {
     problems,
     stale,
     syncedAt: new Date().toISOString(),
-    readFrom
+    readFrom,
+    snapWhy
   };
   if (cache.size > 12) cache.clear();
   cache.set(ckey, { at: Date.now(), payload });

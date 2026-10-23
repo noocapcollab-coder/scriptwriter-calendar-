@@ -3,15 +3,16 @@
 // (same value as on noocap-pm). Without it, or if the snapshot can't be reached, callers fall back to Notion directly.
 const SNAP_URL = 'https://noocap-pm.vercel.app/api/boards';
 let snap = { t: 0, d: null }, snapP = null;
+export let snapWhy = '';
 async function snapshot() {
   const k = process.env.BOARDS_KEY;
-  if (!k) return null;
+  if (!k) { snapWhy = 'BOARDS_KEY not set on this project'; return null; }
   if (snap.d && Date.now() - snap.t < 30000) return snap.d;
   if (!snapP) {
     snapP = fetch(SNAP_URL + '?k=' + encodeURIComponent(k), { signal: AbortSignal.timeout(30000) })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => { snapWhy = r.ok ? '' : 'snapshot answered ' + r.status; return r.ok ? r.json() : null; })
       .then((d) => { if (d && d.boards) snap = { t: Date.now(), d }; return snap.d; })
-      .catch(() => snap.d)
+      .catch((e) => { snapWhy = 'snapshot failed: ' + e.message; return snap.d; })
       .finally(() => { snapP = null; });
   }
   return snapP;
