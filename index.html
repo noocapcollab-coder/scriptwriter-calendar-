@@ -36,6 +36,8 @@ h1{font-size:23px;font-weight:600;margin:0}
 .kpi .lab{font-size:11.5px;color:var(--tx3)}
 .kpi .val{font-size:31px;font-weight:600;margin-top:5px;line-height:1}
 .risk{border-color:rgba(241,107,107,.35)}
+.ccol{width:110px;text-align:right;font-size:13.5px}
+@media(max-width:620px){.ccol{width:70px}}
 .kpi .hint{font-size:11.5px;color:var(--tx3);margin-top:7px;line-height:1.4}
 .lead{color:var(--tx2);font-size:13px;margin-top:3px}
 .meta{color:var(--tx3);font-size:11.5px;margin-top:4px}
@@ -157,7 +159,7 @@ select.field{cursor:pointer}
 <div class="banner" id="banner"></div>
 <div class="card" id="session" style="overflow:hidden;margin-bottom:18px"></div>
 
-<div class="kpis">
+<div class="kpis" style="display:none">
   <div class="kpi risk"><div class="lab">Late scripts</div><div class="val" id="k4" style="color:var(--red)">—</div>
     <div class="hint">Script deadline has passed and there's still no approved script</div></div>
   <div class="kpi"><div class="lab">Scripts to write this week</div><div class="val" id="k3" style="color:var(--blue)">—</div>
@@ -171,11 +173,15 @@ select.field{cursor:pointer}
 <div class="card risk" id="riskbox" style="overflow:hidden"></div>
 
 <div class="sec">
-  <p class="sechd">Each creator · how many scripts are ready, and how many to write</p>
-  <div class="dec" id="dec"></div>
+  <p class="sechd">Creators</p>
+  <div id="dec"></div>
 </div>
 
-<div class="sec">
+<div class="sec row">
+  <button id="calbtn">Show calendar</button>
+  <button id="hkbtn">Board clean-up</button>
+</div>
+<div class="sec" id="calsec" style="display:none">
   <div class="between" style="margin-bottom:4px">
     <p class="sechd" style="margin:0">Calendar</p>
     <div class="row" style="gap:6px">
@@ -203,8 +209,7 @@ select.field{cursor:pointer}
   <div class="card" id="daypanel" style="margin-top:14px;overflow:hidden"></div>
 </div>
 
-<div class="sec">
-  <button id="hkbtn">Board clean-up</button>
+<div class="sec" style="margin-top:0">
   <div class="card" id="hk" style="display:none;overflow:hidden;margin-top:12px"></div>
 </div>
 
@@ -223,6 +228,7 @@ var DONE_FROM=8;
 // "Personal only" hides sponsors below this stage. At To Post it is committed.
 var SPON_COMMIT=10;
 function isDone(v){return v.stage>=DONE_FROM}
+var GONE=[];
 var calMode='post', who='all', saving=false, onlyPersonal=false, showAllLate=false;
 var cushion=parseFloat(localStorage.getItem('noocap_scripts_cushion'))||1;
 if([1,1.5,2,3,4].indexOf(cushion)<0) cushion=cushion<2.5?2:(cushion<3.5?3:4);
@@ -297,8 +303,8 @@ function toneHex(s){return s>=5?'var(--green)':(s>=3?'var(--amber)':'var(--red)'
 function label(s){return STAGES[s]||('stage '+s)}
 function kindChip(v){
   var out='';
-  if(v.format) out+='<span class="k '+(v.format==='Long'?'k-l':'k-sh')+'">'+esc(v.format)+'</span>';
-  if(v.kind) out+='<span class="k '+(v.kind==='Sponsor'?'k-s':'k-p')+'">'+esc(v.kind)+'</span>';
+  if(v.format==='Long') out+='<span class="k '+(v.format==='Long'?'k-l':'k-sh')+'">'+esc(v.format)+'</span>';
+  if(v.kind==='Sponsor') out+='<span class="k k-s">Sponsor</span>';
   return out;
 }
 
@@ -419,8 +425,7 @@ function renderSession(){
         '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
         '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
         '<span style="white-space:nowrap">'+kindChip(v)+
-        '<span class="chip c-n" style="margin-right:6px">now: '+esc(label(v.stage))+'</span>'+
-        '<span class="chip c-'+tone(v.stage)+'">posts '+shortDay(pdate(v))+'</span></span>'+
+        '<span class="chip c-'+tone(v.stage)+'">posts '+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span></span>'+
       '</div>';
     }).join('');
 }
@@ -448,7 +453,10 @@ function render(){
 
   // Split the late list: ones still coming up can be saved, ones whose post
   // date has already gone by need a new date (or archiving).
-  var soon=risk.filter(function(v){return pdate(v)>=TODAY});
+  // Videos already listed in today's job aren't repeated here.
+  var sd=sessionFor(TODAY)||sessionFor(nextSessionDay(addD(TODAY,1)));
+  var inJob=sd&&sd.covers?onDates(sd.covers).map(function(v){return v.id}):[];
+  var soon=risk.filter(function(v){return pdate(v)>=TODAY&&inJob.indexOf(v.id)<0});
   var gone=risk.filter(function(v){return pdate(v)<TODAY});
   function daysAgo(v){var n=Math.round((TODAY-pdate(v))/864e5);return n===1?'yesterday':n+' days ago'}
   function riskRow(v,chip){return '<div class="crow" style="border-top-color:rgba(241,107,107,.14)">'+
@@ -456,67 +464,29 @@ function render(){
     esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
     '<span style="white-space:nowrap">'+kindChip(v)+
     '<span class="chip c-n" style="margin-right:6px">stuck at: '+esc(label(v.stage))+'</span>'+chip+'</span></div>'}
-  var SHOW=5;
-  document.getElementById('riskbox').innerHTML = risk.length
+  GONE=gone;
+  document.getElementById('riskbox').style.display=soon.length?'':'none';
+  document.getElementById('riskbox').innerHTML = soon.length
     ? '<div class="chd" style="background:transparent;border-bottom:1px solid rgba(241,107,107,.22)">'+
-      '<span class="name" style="color:var(--red)">Late scripts</span>'+
-      '<span class="sub">'+risk.length+' video'+(risk.length===1?'':'s')+' missed the script deadline</span></div>'+
-      (soon.length?'<div class="subhd">Still posting soon · write these first</div>'+
-        soon.map(function(v){return riskRow(v,'<span class="chip c-r">posts '+shortDay(pdate(v))+'</span>')}).join(''):'')+
-      (gone.length?'<div class="subhd">Post date already passed · give it a new date or archive it</div>'+
-        gone.map(function(v,i){return (i===SHOW&&!showAllLate?'<button class="more" id="lmore">Show '+(gone.length-SHOW)+' more</button>':'')+
-          ((i<SHOW||showAllLate)?riskRow(v,'<span class="chip c-r">was due '+dmy(pdate(v))+' · '+daysAgo(v)+'</span>'):'')}).join(''):'')
-    : '<div class="empty">No late scripts. Everything is on track.</div>';
+      '<span class="name" style="color:var(--red)">Late: write these first</span>'+
+      '<span class="sub">script deadline passed, still posting soon</span></div>'+
+      soon.map(function(v){return '<div class="crow" style="border-top-color:rgba(241,107,107,.14)">'+
+        '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
+        esc(v.creator)+' · </span>'+esc(v.title)+'</a><span style="white-space:nowrap">'+kindChip(v)+
+        '<span class="chip c-r">posts '+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span></span></div>'}).join('')
+    : '';
   var lm=document.getElementById('lmore'); if(lm) lm.onclick=function(){showAllLate=true;render()};
 
-  document.getElementById('dec').innerHTML=CREATORS.map(function(c){
-    var need=needFor(c), hand=inHand(c), wk=coversWeeks(c), bank=bankOf(c);
-    var until=addD(TODAY,Math.round(wk*7));
-    var open=V.filter(function(v){
-      return v.creator===c&&v.stage<5&&pdate(v)&&pdate(v)>=TODAY})
-      .sort(function(a,b){return dueOf(a)-dueOf(b)});
-
-    var dated=open.length?'<div style="border-top:1px solid var(--line);margin-top:11px;padding-top:9px">'+
-      '<div class="sub" style="margin-bottom:4px">Has a post date, needs a script</div>'+
-      open.map(function(v){
-        var due=dueOf(v), late=due<TODAY;
-        return '<div class="between" style="gap:8px;padding:3px 0">'+
-          '<a class="vt" style="font-size:12.5px" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
-          esc(v.title)+'</a>'+
-          '<span style="white-space:nowrap">'+kindChip(v)+
-          '<span class="chip c-'+(late?'r':'a')+'">due '+shortDay(due)+'</span></span></div>';
-      }).join('')+'</div>':'';
-
-    return '<div class="card" style="overflow:hidden">'+
-      '<div class="chd"><span class="name">'+esc(c)+
-        '<span class="k '+((FORMATS[c]||'Short')==='Long'?'k-l':'k-sh')+'" style="margin-left:9px">'+
-        esc(FORMATS[c]||'Short')+'</span></span>'+
-        '<span class="sub">posts about '+rateOf(c)+' a week</span></div>'+
-      '<div style="padding:13px 16px 14px">'+
-        '<div class="between" style="align-items:flex-end">'+
-          '<div>'+
-            '<div style="font-size:30px;font-weight:600;line-height:1;color:'+
-              (need?'var(--amber)':'var(--green)')+'">'+need+'</div>'+
-            '<div class="sub">'+(need?'script'+(need===1?'':'s')+' to write this week':'nothing to write, ahead already')+'</div>'+
-          '</div>'+
-          '<div style="text-align:right">'+
-            '<div style="font-size:15px;font-weight:500">'+hand+' ready</div>'+
-            '<div class="sub">'+(hand?'covers about '+wk.toFixed(1)+' wk'+(wk.toFixed(1)==='1.0'?'':'s')+' of posts':'no scripts ready yet')+
-              (sponAhead(c)?' <span style="color:#93aaff">+'+sponAhead(c)+' sponsor</span>':'')+'</div>'+
-          '</div>'+
-        '</div>'+
-        '<div class="meter" style="margin:12px 0 4px" title="Scripts ready vs your goal of '+cushion+' week'+(cushion==1?'':'s')+' ahead"><i style="width:'+
-          Math.min(100,Math.round(wk/cushion*100))+'%;background:'+
-          (need?'var(--amber)':'var(--green)')+'"></i></div>'+
-        '<div class="sub">'+Math.min(100,Math.round(wk/cushion*100))+'% of the '+cushion+'-week goal</div>'+
-        dated+
-        '<div class="between" style="border-top:1px solid var(--line);margin-top:10px;padding-top:9px">'+
-          '<span class="sub">Ideas waiting to be scripted</span>'+
-          '<span style="font-size:14px;font-weight:500;color:'+
-            (bank?(bank<3?'var(--amber)':'var(--green)'):'var(--red)')+'">'+bank+'</span>'+
-        '</div>'+
-      '</div></div>';
-  }).join('');
+  document.getElementById('dec').innerHTML='<div class="card" style="overflow:hidden">'+
+    '<div class="crow" style="border-top:0;background:var(--panel2);font-size:11.5px;color:var(--tx3)">'+
+      '<span style="flex:1">Creator</span><span class="ccol">Scripts ready</span><span class="ccol">To write</span><span class="ccol">Ideas waiting</span></div>'+
+    CREATORS.map(function(c){
+      var need=needFor(c), hand=inHand(c), bank=bankOf(c);
+      return '<div class="crow"><span style="flex:1">'+esc(c)+'</span>'+
+        '<span class="ccol">'+hand+'</span>'+
+        '<span class="ccol" style="font-weight:600;color:'+(need?'var(--amber)':'var(--green)')+'">'+(need||'✓')+'</span>'+
+        '<span class="ccol" style="color:'+(bank?(bank<3?'var(--amber)':'var(--tx2)'):'var(--red)')+'">'+bank+'</span></div>';
+    }).join('')+'</div>';
 
   renderSession();
   renderHK();
@@ -845,6 +815,10 @@ function renderHK(){
     '<div style="padding:11px 16px 14px">'+
       '<div class="sub" style="margin-bottom:9px">Old date: the post date has passed but the card was '+
       'never marked posted. No date: the script is written but no post date is set.</div>'+
+      (GONE.length?'<div class="sub" style="margin:4px 0 6px;color:var(--tx2)">Post date passed, no script yet. Give each a new date or archive it:</div>'+
+        GONE.map(function(v){return '<div class="crow" style="padding:6px 0"><a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
+          esc(v.creator)+' · </span>'+esc(v.title)+'</a><span class="chip c-n">was '+dmy(pdate(v))+'</span></div>'}).join('')+
+        '<div class="sub" style="margin:14px 0 6px;color:var(--tx2)">Per creator:</div>':'')+
       CREATORS.map(function(c){
         var st=staleOf(c), u=undated(c);
         return '<div class="crow" style="padding:7px 0"><span>'+esc(c)+'</span>'+
@@ -856,6 +830,10 @@ function renderHK(){
     '</div>';
 }
 
+document.getElementById('calbtn').onclick=function(){
+  var box=document.getElementById('calsec'), open=box.style.display!=='none';
+  box.style.display=open?'none':'block'; this.textContent=open?'Show calendar':'Hide calendar';
+};
 document.getElementById('hkbtn').onclick=function(){
   var box=document.getElementById('hk');
   var open=box.style.display!=='none';
