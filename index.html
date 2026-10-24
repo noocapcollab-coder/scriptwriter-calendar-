@@ -510,7 +510,7 @@ function renderWeek(){
         '<div class="tr"><div style="width:'+pct+'%;background:'+col+'"></div></div>'+
         '<span class="n">'+r.done+'/'+r.all+'</span></div>';
     }).join('')+'<div class="pad"></div>';
-  ob.style.display=open.length?'':'none';
+  ob.style.display='none'; return; // removed from the page
   ob.innerHTML=head('Not posted yet <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+open.length+' this week</span>','planned for Mon to Sat, still being made')+
     capped('open',open.map(function(v){
       var p=pdate(v), late=p<TODAY, today=same(p,TODAY), s=v.stage;
