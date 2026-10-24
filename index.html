@@ -201,11 +201,9 @@ button:hover{border-color:#3a3f48;background:var(--panel2)}
 
 <div class="card" id="roster" style="display:none;padding:15px 17px;margin-bottom:16px"></div>
 <div class="banner" id="banner"></div>
-<div class="card risk sp" id="riskbox" style="overflow:hidden"></div>
-<div class="two">
-  <div class="card" id="session" style="overflow:hidden"></div>
-  <div class="card" id="week" style="overflow:hidden"></div>
-</div>
+<div class="card risk sp" id="riskbox" style="display:none!important"></div>
+<div class="card" id="session" style="display:none!important"></div>
+<div class="card sp" id="week" style="overflow:hidden"></div>
 <div class="card sp" id="wkopen" style="overflow:hidden"></div>
 
 <div class="kpis" style="display:none">
@@ -478,7 +476,7 @@ function head(title,right){
 // Number the visible sections 1, 2, 3 in page order, like HQ
 function numberSections(){
   var n=0;
-  ['riskbox','session','week','wkopen','dec'].forEach(function(id){
+  ['week','wkopen','dec'].forEach(function(id){
     var el=document.getElementById(id); if(!el||el.style.display==='none') return;
     var b=el.querySelector('.num'); if(b) b.textContent=++n;
   });
@@ -557,7 +555,7 @@ function render(){
     '<span style="white-space:nowrap">'+kindChip(v)+
     '<span class="chip c-n" style="margin-right:6px">stuck at: '+esc(label(v.stage))+'</span>'+chip+'</span></div>'}
   GONE=gone;
-  document.getElementById('riskbox').style.display=soon.length?'':'none';
+  document.getElementById('riskbox').style.display='none'; // removed from the page
   document.getElementById('riskbox').innerHTML = soon.length
     ? head('Late: write these first <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+soon.length+' scripts</span>','script deadline passed, still posting soon')+
       capped('late',soon.map(function(v){return nrow(v,same(pdate(v),TODAY)?'Posts today':'Posts '+shortDay(pdate(v)),'c-r','Still at '+label(v.stage))}))+
@@ -576,7 +574,6 @@ function render(){
         '<span class="ccol" style="color:'+(bank?(bank<3?'var(--amber)':'var(--tx2)'):'var(--red)')+'">'+bank+'</span></div>';
     }).join('')+'</div>';
 
-  renderSession();
   renderWeek();
   renderHK();
   numberSections();
