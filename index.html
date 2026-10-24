@@ -3,19 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NOOCAP — Scripts</title>
+<title>NOOCAP Scripts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#080a10; --panel:#0e1119; --panel2:#121621; --line:#1c2130;
-  --tx:#e7e9ee; --tx2:#8e96a6; --tx3:#5b6273;
-  --green:#3ddc97; --greenbg:rgba(61,220,151,.12);
-  --amber:#f0b429; --amberbg:rgba(240,180,41,.12);
-  --red:#f16b6b; --redbg:rgba(241,107,107,.12);
-  --blue:#6d8cff; --bluebg:rgba(109,140,255,.15);
+  --bg:#0d0e11; --panel:#14161b; --panel2:#1a1d23; --panel3:#1c1f25; --line:#23262d; --line2:#2d3139; --line3:#1f2228;
+  --tx:#e9e7e2; --tx2:#9ea2ab; --tx3:#6b7079; --soft:#c9ccd2;
+  --green:#3dd6b0; --greenbg:rgba(61,214,176,.13);
+  --amber:#f5b86a; --amberbg:rgba(242,163,58,.14);
+  --red:#ff8e82; --redbg:rgba(240,106,92,.15);
+  --blue:#a9c1ff; --bluebg:rgba(120,150,255,.15);
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);
-  font:400 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+  font:400 14px/1.5 'IBM Plex Sans',system-ui,sans-serif;
   -webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:var(--tx2);background:transparent;border:1px solid var(--line);
@@ -132,13 +134,55 @@ select.field{cursor:pointer}
   border-radius:11px;padding:13px 16px;font-size:13px;margin-bottom:16px;display:none}
 @media(max-width:860px){.kpis{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.grid7{gap:3px}.day{min-height:54px;padding:5px}.wrap{padding:20px 14px 60px}}
+
+/* ---------- HQ look ---------- */
+.wrap{max-width:1320px;padding:24px 22px 60px}
+.when{font:12.5px 'IBM Plex Mono',monospace;color:var(--tx2);letter-spacing:.01em}
+h1{font:600 34px/1.15 'Space Grotesk',sans-serif;margin:6px 0 4px}
+.lead{color:var(--tx2)}
+.hdr{margin-bottom:18px;align-items:flex-end}
+button{border-radius:10px;border-color:var(--line2);color:var(--tx);padding:8px 16px}
+button:hover{border-color:#3a3f48;background:var(--panel2)}
+.field{background:var(--panel);border-color:var(--line2);border-radius:9px}
+.card{border-radius:14px;border-color:var(--line)}
+.risk{border-color:rgba(240,106,92,.35)}
+.chd{background:transparent;border-bottom:0;padding:18px 20px 8px;border-radius:14px 14px 0 0}
+.chd .name{font:600 19px 'Space Grotesk',sans-serif;display:flex;align-items:center;gap:12px}
+.chd .sub{font-size:13px;color:var(--tx2)}
+.num{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;background:var(--panel3);
+  color:var(--soft);font:600 12px 'IBM Plex Mono',monospace;flex:none}
+.crow{border-top-color:var(--line3);padding:11px 20px}
+.vt{font-size:14px}
+.chip{font:600 11px 'IBM Plex Sans',sans-serif;border-radius:6px;padding:4px 9px}
+.c-n{background:var(--panel3);color:var(--tx2)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:16px}
+.sp{margin-bottom:16px}
+.nrow{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 20px;border-top:1px solid var(--line3)}
+.nrow .tag{justify-self:start;text-transform:uppercase;letter-spacing:.05em;font:600 11.5px 'IBM Plex Sans',sans-serif;padding:5px 9px;border-radius:6px;white-space:nowrap}
+.nrow .ti{min-width:0;font-size:14.5px}
+.nrow .ti small{display:block;color:var(--tx2);font-size:12.5px;margin-top:3px}
+.nrow .ob{white-space:nowrap;font-size:13.5px;padding:8px 18px}
+.big{display:flex;gap:40px;flex-wrap:wrap;padding:6px 20px 14px}
+.big b{font:600 30px/1.1 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+.big b small{font:500 15px 'IBM Plex Sans',sans-serif;color:var(--tx2);margin-left:4px}
+.big div>span{display:block;color:var(--tx2);font-size:12.5px;margin-top:3px}
+.wrow{display:grid;grid-template-columns:minmax(0,1fr) 110px 46px;gap:12px;align-items:center;padding:9px 20px;border-top:1px solid var(--line3);font-size:14.5px}
+.wrow b{font-weight:600}
+.wrow small{color:var(--tx2);font-size:12.5px;margin-left:6px}
+.wrow .tr{height:6px;border-radius:3px;background:var(--panel3);overflow:hidden}
+.wrow .tr div{height:6px}
+.wrow .n{font:500 13px 'IBM Plex Mono',monospace;text-align:right;color:var(--soft)}
+.pad{height:8px}
+.sec{margin-top:16px}
+@media(max-width:900px){.two{grid-template-columns:1fr}.nrow{grid-template-columns:minmax(0,1fr) auto}.nrow .tag{grid-column:1/-1}h1{font-size:28px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<div class="between">
+<div class="between hdr">
   <div>
+    <div class="when" id="when"></div>
     <h1>Scripts</h1>
     <div class="lead">What the script team should write next, and which scripts are late.</div>
     <div class="meta" id="hsub">loading boards…</div>
@@ -157,8 +201,12 @@ select.field{cursor:pointer}
 
 <div class="card" id="roster" style="display:none;padding:15px 17px;margin-bottom:16px"></div>
 <div class="banner" id="banner"></div>
-<div class="card" id="session" style="overflow:hidden;margin-bottom:18px"></div>
-<div class="card" id="week" style="overflow:hidden;margin-bottom:18px"></div>
+<div class="card risk sp" id="riskbox" style="overflow:hidden"></div>
+<div class="two">
+  <div class="card" id="session" style="overflow:hidden"></div>
+  <div class="card" id="week" style="overflow:hidden"></div>
+</div>
+<div class="card sp" id="wkopen" style="overflow:hidden"></div>
 
 <div class="kpis" style="display:none">
   <div class="kpi risk"><div class="lab">Late scripts</div><div class="val" id="k4" style="color:var(--red)">—</div>
@@ -171,12 +219,7 @@ select.field{cursor:pointer}
     <div class="hint">Personal videos with a post date next week</div></div>
 </div>
 
-<div class="card risk" id="riskbox" style="overflow:hidden"></div>
-
-<div class="sec">
-  <p class="sechd">Creators</p>
-  <div id="dec"></div>
-</div>
+<div id="dec"></div>
 
 <div class="sec row">
   <button id="calbtn">Show calendar</button>
@@ -394,16 +437,12 @@ function renderSession(){
   if(ses.kind==='topics'){
     var rows=CREATORS.map(function(c){return {c:c,n:bankOf(c)}}).sort(function(a,b){return a.n-b.n});
     var total=rows.reduce(function(a,x){return a+x.n},0);
-    box.innerHTML='<div class="chd"><span class="name">Today\'s job: add new video ideas</span>'+
-      '<span class="sub">'+when+'</span></div>'+
-      '<div style="padding:13px 16px">'+
-        '<div style="font-size:26px;font-weight:600;line-height:1">'+total+'</div>'+
-        '<div class="sub" style="margin-bottom:11px">ideas waiting to be scripted, across all creators. Fill up the creators with the fewest.</div>'+
-        rows.map(function(r){
-          return '<div class="crow" style="padding:6px 0"><span>'+esc(r.c)+'</span>'+
-          '<span class="chip '+(r.n?(r.n<3?'c-a':'c-g'):'c-r')+'">'+r.n+' idea'+(r.n===1?'':'s')+'</span></div>';
-        }).join('')+
-      '</div>';
+    box.innerHTML=head('Today\'s job: add video ideas',when)+
+      '<div class="big"><div><b>'+total+'</b><span>ideas waiting, fill up the creators with the fewest</span></div></div>'+
+      rows.map(function(r){
+        return '<div class="wrow"><b>'+esc(r.c)+'</b><span></span>'+
+        '<span class="chip '+(r.n?(r.n<3?'c-a':'c-g'):'c-r')+'" style="justify-self:end">'+r.n+'</span></div>';
+      }).join('')+'<div class="pad"></div>';
     return;
   }
 
@@ -411,64 +450,76 @@ function renderSession(){
   var todo=scope.filter(function(v){return v.stage<5});
   var cov=ses.covers.map(shortDay).join(', ');
   var doneN=scope.length-todo.length;
-  box.innerHTML='<div class="chd"><span class="name">'+(isToday?'Today\'s job':'Next job')+
-    ': write scripts for videos posting '+cov+'</span>'+
-    '<span class="sub">'+when+'</span></div>'+
-    '<div style="padding:13px 16px '+(todo.length?'4px':'14px')+'">'+
-      '<div style="font-size:26px;font-weight:600;line-height:1;color:'+
-        (todo.length?'var(--amber)':'var(--green)')+'">'+todo.length+
-        ' <span style="font-size:14px;font-weight:500">script'+(todo.length===1?'':'s')+' to write</span></div>'+
-      '<div class="sub">'+scope.length+' video'+(scope.length===1?' posts':'s post')+' on those days, '+
-        doneN+' already '+(doneN===1?'has a script':'have scripts')+(todo.length?'':'. All done')+'</div>'+
-    '</div>'+
+  box.innerHTML=head((isToday?'Today\'s job':'Next job')+': scripts for '+cov,when)+
+    '<div class="big"><div><b style="color:'+(todo.length?'var(--amber)':'var(--green)')+'">'+todo.length+'</b>'+
+      '<span>script'+(todo.length===1?'':'s')+' to write. '+scope.length+' video'+(scope.length===1?' posts':'s post')+' on those days, '+
+      doneN+' already '+(doneN===1?'has a script':'have scripts')+(todo.length?'':'. All done')+'</span></div></div>'+
     todo.map(function(v){
-      return '<div class="crow">'+
-        '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
-        '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
-        '<span style="white-space:nowrap">'+kindChip(v)+
-        '<span class="chip c-'+tone(v.stage)+'">posts '+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span></span>'+
-      '</div>';
-    }).join('');
+      return nrow(v,'Posts '+shortDay(pdate(v)),'c-'+tone(v.stage),'Still at '+label(v.stage));
+    }).join('')+'<div class="pad"></div>';
 }
+
+// One row in the HQ style: a tag on the left, the title with a status line, and an Open card button
+function nrow(v,tag,cls,sub){
+  return '<div class="nrow"><span class="tag '+cls+'">'+esc(tag)+'</span>'+
+    '<div class="ti">'+kindChip(v)+esc(v.creator)+': '+esc(v.title)+'<small>'+esc(sub)+'</small></div>'+
+    '<a class="ob" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><button class="ob">Open card</button></a></div>';
+}
+var SHOWALL={};
+// Long lists show the first 7, with a "Show N more" link like HQ
+function capped(key,rows){
+  if(SHOWALL[key]||rows.length<=8) return rows.join('');
+  return rows.slice(0,7).join('')+'<button class="more" style="padding:12px 20px;color:var(--tx2)" onclick="SHOWALL[\''+key+'\']=true;render()">Show '+(rows.length-7)+' more</button>';
+}
+function head(title,right){
+  return '<div class="chd"><span class="name"><span class="num"></span>'+title+'</span>'+
+    (right?'<span class="sub">'+right+'</span>':'')+'</div>';
+}
+// Number the visible sections 1, 2, 3 in page order, like HQ
+function numberSections(){
+  var n=0;
+  ['riskbox','session','week','wkopen','dec'].forEach(function(id){
+    var el=document.getElementById(id); if(!el||el.style.display==='none') return;
+    var b=el.querySelector('.num'); if(b) b.textContent=++n;
+  });
+}
+function stageWord(s){return s>=12?'Posted':s>=10?'Ready to post':s>=8?'In review':s===7?'In edit':s===6?'Filming':s===5?'Script approval':'Scripting'}
 
 // This week (Monday to Saturday): how many videos went out, and which ones
 // planned for this week are still being made (filming, edit, changes, approval).
 function renderWeek(){
-  var box=document.getElementById('week'); if(!box) return;
+  var box=document.getElementById('week'), ob=document.getElementById('wkopen'); if(!box) return;
   var from=thisWeek, to=addD(thisWeek,6); // Monday 00:00 up to Sunday 00:00
   var wk=VALL.filter(function(v){var p=pdate(v);return p&&p>=from&&p<to});
   var posted=wk.filter(function(v){return v.stage>=12});
   var open=wk.filter(function(v){return v.stage<12})
     .sort(function(a,b){return pdate(a)-pdate(b)||a.stage-b.stage});
-  var editing=open.filter(function(v){return v.stage>=6&&v.stage<=9}).length;
+  var making=open.filter(function(v){return v.stage>=6&&v.stage<=9}).length;
   var per=CREATORS.map(function(c){
     var all=wk.filter(function(v){return v.creator===c});
-    return {c:c,done:all.filter(function(v){return v.stage>=12}).length,all:all.length};
-  }).filter(function(r){return r.all});
-  function chipFor(v){
-    var late=pdate(v)<TODAY, s=v.stage;
-    var cls=late?'c-r':(s>=10?'c-g':(s>=6?'c-a':'c-n'));
-    return '<span class="chip '+cls+'">'+(late?'was due ':'posts ')+shortDay(pdate(v))+' · '+esc(label(s))+'</span>';
-  }
-  box.innerHTML='<div class="chd"><span class="name">This week</span>'+
-    '<span class="sub">Mon '+dmy(from)+' to Sat '+dmy(addD(from,5))+'</span></div>'+
-    '<div style="padding:13px 16px 6px;display:flex;gap:34px;flex-wrap:wrap">'+
-      '<div><div style="font-size:26px;font-weight:600;line-height:1;color:var(--green)">'+posted.length+
-        ' <span style="font-size:14px;font-weight:500;color:var(--tx2)">of '+wk.length+'</span></div>'+
-        '<div class="sub">videos posted</div></div>'+
-      '<div><div style="font-size:26px;font-weight:600;line-height:1;color:'+(editing?'var(--amber)':'var(--green)')+'">'+editing+'</div>'+
-        '<div class="sub">still being filmed, edited or approved</div></div>'+
+    var late=all.filter(function(v){return v.stage<12&&pdate(v)<TODAY}).length;
+    return {c:c,done:all.filter(function(v){return v.stage>=12}).length,all:all.length,late:late};
+  }).filter(function(r){return r.all}).sort(function(a,b){return (a.done/a.all)-(b.done/b.all)});
+  box.innerHTML=head('This week <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+posted.length+' of '+wk.length+' posted</span>',
+      'Mon '+dmy(from)+' to Sat '+dmy(addD(from,5)))+
+    '<div class="big">'+
+      '<div><b style="color:var(--green)">'+posted.length+'<small>of '+wk.length+'</small></b><span>videos posted</span></div>'+
+      '<div><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
     '</div>'+
-    (per.length?'<div style="padding:4px 16px 10px;display:flex;flex-wrap:wrap;gap:6px">'+per.map(function(r){
-      return '<span class="chip '+(r.done>=r.all?'c-g':'c-n')+'">'+esc(r.c)+' '+r.done+'/'+r.all+'</span>';
-    }).join('')+'</div>':'')+
-    (open.length?'<div class="crow" style="background:var(--panel2);font-size:11.5px;color:var(--tx3)"><span>Not posted yet</span><span>'+open.length+'</span></div>'+
-      open.map(function(v){
-        return '<div class="crow"><a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
-          '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
-          '<span style="white-space:nowrap">'+kindChip(v)+chipFor(v)+'</span></div>';
-      }).join('')
-     :'<div class="crow"><span class="sub">Everything planned for this week is posted.</span></div>');
+    per.map(function(r){
+      var pct=Math.round(r.done/r.all*100), col=r.done>=r.all?'var(--green)':(r.late?'var(--red)':'var(--amber)');
+      return '<div class="wrow"><span><b>'+esc(r.c)+'</b>'+(r.late?'<small>'+r.late+' late</small>':'')+'</span>'+
+        '<div class="tr"><div style="width:'+pct+'%;background:'+col+'"></div></div>'+
+        '<span class="n">'+r.done+'/'+r.all+'</span></div>';
+    }).join('')+'<div class="pad"></div>';
+  ob.style.display=open.length?'':'none';
+  ob.innerHTML=head('Not posted yet <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+open.length+' this week</span>','planned for Mon to Sat, still being made')+
+    capped('open',open.map(function(v){
+      var p=pdate(v), late=p<TODAY, today=same(p,TODAY), s=v.stage;
+      var cls=late?'c-r':(s>=10?'c-g':(s>=6?'c-a':'c-n'));
+      var tag=late?'Was due '+shortDay(p):(today?'Posts today':'Posts '+shortDay(p));
+      return nrow(v,tag,cls,'Still '+(s>=10?'waiting to post':'at '+label(s)));
+    }))+'<div class="pad"></div>';
 }
 
 function render(){
@@ -508,18 +559,14 @@ function render(){
   GONE=gone;
   document.getElementById('riskbox').style.display=soon.length?'':'none';
   document.getElementById('riskbox').innerHTML = soon.length
-    ? '<div class="chd" style="background:transparent;border-bottom:1px solid rgba(241,107,107,.22)">'+
-      '<span class="name" style="color:var(--red)">Late: write these first</span>'+
-      '<span class="sub">script deadline passed, still posting soon</span></div>'+
-      soon.map(function(v){return '<div class="crow" style="border-top-color:rgba(241,107,107,.14)">'+
-        '<a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><span class="who">'+
-        esc(v.creator)+' · </span>'+esc(v.title)+'</a><span style="white-space:nowrap">'+kindChip(v)+
-        '<span class="chip c-r">posts '+shortDay(pdate(v))+' · '+esc(label(v.stage))+'</span></span></div>'}).join('')
+    ? head('Late: write these first <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+soon.length+' scripts</span>','script deadline passed, still posting soon')+
+      capped('late',soon.map(function(v){return nrow(v,same(pdate(v),TODAY)?'Posts today':'Posts '+shortDay(pdate(v)),'c-r','Still at '+label(v.stage))}))+
+      '<div class="pad"></div>'
     : '';
   var lm=document.getElementById('lmore'); if(lm) lm.onclick=function(){showAllLate=true;render()};
 
-  document.getElementById('dec').innerHTML='<div class="card" style="overflow:hidden">'+
-    '<div class="crow" style="border-top:0;background:var(--panel2);font-size:11.5px;color:var(--tx3)">'+
+  document.getElementById('dec').innerHTML='<div class="card" style="overflow:hidden">'+head('Creators','scripts in hand and ideas waiting')+
+    '<div class="crow" style="font-size:12px;color:var(--tx3)">'+
       '<span style="flex:1">Creator</span><span class="ccol">Scripts ready</span><span class="ccol">To write</span><span class="ccol">Ideas waiting</span></div>'+
     CREATORS.map(function(c){
       var need=needFor(c), hand=inHand(c), bank=bankOf(c);
@@ -532,6 +579,8 @@ function render(){
   renderSession();
   renderWeek();
   renderHK();
+  numberSections();
+  var w=document.getElementById('when'); if(w) w.textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+' · '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' IST';
   renderCal();
 }
 
