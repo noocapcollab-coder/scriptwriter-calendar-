@@ -158,6 +158,7 @@ select.field{cursor:pointer}
 <div class="card" id="roster" style="display:none;padding:15px 17px;margin-bottom:16px"></div>
 <div class="banner" id="banner"></div>
 <div class="card" id="session" style="overflow:hidden;margin-bottom:18px"></div>
+<div class="card" id="week" style="overflow:hidden;margin-bottom:18px"></div>
 
 <div class="kpis" style="display:none">
   <div class="kpi risk"><div class="lab">Late scripts</div><div class="val" id="k4" style="color:var(--red)">—</div>
@@ -430,6 +431,46 @@ function renderSession(){
     }).join('');
 }
 
+// This week (Monday to Saturday): how many videos went out, and which ones
+// planned for this week are still being made (filming, edit, changes, approval).
+function renderWeek(){
+  var box=document.getElementById('week'); if(!box) return;
+  var from=thisWeek, to=addD(thisWeek,6); // Monday 00:00 up to Sunday 00:00
+  var wk=VALL.filter(function(v){var p=pdate(v);return p&&p>=from&&p<to});
+  var posted=wk.filter(function(v){return v.stage>=12});
+  var open=wk.filter(function(v){return v.stage<12})
+    .sort(function(a,b){return pdate(a)-pdate(b)||a.stage-b.stage});
+  var editing=open.filter(function(v){return v.stage>=6&&v.stage<=9}).length;
+  var per=CREATORS.map(function(c){
+    var all=wk.filter(function(v){return v.creator===c});
+    return {c:c,done:all.filter(function(v){return v.stage>=12}).length,all:all.length};
+  }).filter(function(r){return r.all});
+  function chipFor(v){
+    var late=pdate(v)<TODAY, s=v.stage;
+    var cls=late?'c-r':(s>=10?'c-g':(s>=6?'c-a':'c-n'));
+    return '<span class="chip '+cls+'">'+(late?'was due ':'posts ')+shortDay(pdate(v))+' · '+esc(label(s))+'</span>';
+  }
+  box.innerHTML='<div class="chd"><span class="name">This week</span>'+
+    '<span class="sub">Mon '+dmy(from)+' to Sat '+dmy(addD(from,5))+'</span></div>'+
+    '<div style="padding:13px 16px 6px;display:flex;gap:34px;flex-wrap:wrap">'+
+      '<div><div style="font-size:26px;font-weight:600;line-height:1;color:var(--green)">'+posted.length+
+        ' <span style="font-size:14px;font-weight:500;color:var(--tx2)">of '+wk.length+'</span></div>'+
+        '<div class="sub">videos posted</div></div>'+
+      '<div><div style="font-size:26px;font-weight:600;line-height:1;color:'+(editing?'var(--amber)':'var(--green)')+'">'+editing+'</div>'+
+        '<div class="sub">still being filmed, edited or approved</div></div>'+
+    '</div>'+
+    (per.length?'<div style="padding:4px 16px 10px;display:flex;flex-wrap:wrap;gap:6px">'+per.map(function(r){
+      return '<span class="chip '+(r.done>=r.all?'c-g':'c-n')+'">'+esc(r.c)+' '+r.done+'/'+r.all+'</span>';
+    }).join('')+'</div>':'')+
+    (open.length?'<div class="crow" style="background:var(--panel2);font-size:11.5px;color:var(--tx3)"><span>Not posted yet</span><span>'+open.length+'</span></div>'+
+      open.map(function(v){
+        return '<div class="crow"><a class="vt" href="'+notionURL(v.id)+'" target="_blank" rel="noopener">'+
+          '<span class="who">'+esc(v.creator)+' · </span>'+esc(v.title)+'</a>'+
+          '<span style="white-space:nowrap">'+kindChip(v)+chipFor(v)+'</span></div>';
+      }).join('')
+     :'<div class="crow"><span class="sub">Everything planned for this week is posted.</span></div>');
+}
+
 function render(){
   document.getElementById('cush').value=String(cushion);
   document.getElementById('k3hint').textContent='So every creator stays '+cushion+' week'+(cushion==1?'':'s')+' ahead';
@@ -489,6 +530,7 @@ function render(){
     }).join('')+'</div>';
 
   renderSession();
+  renderWeek();
   renderHK();
   renderCal();
 }
