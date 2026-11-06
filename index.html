@@ -483,6 +483,35 @@ function numberSections(){
 }
 function stageWord(s){return s>=12?'Posted':s>=10?'Ready to post':s>=8?'In review':s===7?'In edit':s===6?'Filming':s===5?'Script approval':'Scripting'}
 
+// Videos edited this week: every cut that went for review Mon–Sun (EDIT TRACKER),
+// plus sponsor edits on the boards that never got logged there. Fetched once per
+// week start and refreshed every 5 minutes; the card shows a dash until it lands.
+var EDITED=null, editedAt=0, editedFor='';
+function ymd(x){return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')}
+function loadEdited(from,force){
+  var k=ymd(from);
+  if(!force&&editedFor===k&&Date.now()-editedAt<5*60*1000) return;
+  editedFor=k; editedAt=Date.now();
+  fetch('/api/edited?from='+k+(force?'&fresh=1':'')).then(function(r){return r.json()}).then(function(j){
+    if(j&&!j.error&&j.from===k){EDITED=j;renderWeek();numberSections()}
+  }).catch(function(){});
+}
+function editedStat(from){
+  loadEdited(from);
+  var e=EDITED&&EDITED.from===ymd(from)?EDITED:null;
+  if(!e) return '<div><b style="color:var(--tx2)">–</b><span>videos edited</span></div>';
+  var parts=[e.personal+' personal',e.sponsor+' sponsor'];
+  if(e.long) parts.push(e.long+' long-form');
+  var eds=Object.keys(e.byEditor).sort(function(a,b){return e.byEditor[b]-e.byEditor[a]})
+    .map(function(n){return n+' '+e.byEditor[n]}).join(' · ');
+  var miss=e.untracked.length;
+  var tip=miss?' title="Not in EDIT TRACKER: '+esc(e.untracked.map(function(u){return u.creator+': '+u.title+' ('+u.editor+')'}).join('; '))+'"':'';
+  return '<div'+tip+'><b style="color:var(--green)">'+e.total+'</b><span>videos edited · '+parts.join(', ')+'</span>'+
+    '<span>'+esc(eds)+'</span>'+
+    (miss?'<span style="color:var(--amber)">'+miss+' sponsor edit'+(miss===1?'':'s')+' not logged in EDIT TRACKER</span>':'')+
+    '</div>';
+}
+
 // This week (Monday to Saturday): how many videos went out, and which ones
 // planned for this week are still being made (filming, edit, changes, approval).
 function renderWeek(){
@@ -503,6 +532,7 @@ function renderWeek(){
     '<div class="big">'+
       '<div><b style="color:var(--green)">'+posted.length+'<small>of '+wk.length+'</small></b><span>videos posted</span></div>'+
       '<div><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
+      editedStat(from)+
     '</div>'+
     per.map(function(r){
       var pct=Math.round(r.done/r.all*100), col=r.done>=r.all?'var(--green)':(r.late?'var(--red)':'var(--amber)');
@@ -942,7 +972,7 @@ document.getElementById('rosterbtn').onclick=function(){
   this.classList.toggle('on',!open);
 };
 
-document.getElementById('reload').onclick=function(){load(true)};
+document.getElementById('reload').onclick=function(){load(true);loadEdited(thisWeek,true)};
 document.getElementById('mtoday').onclick=function(){
   calMonth=new Date(TODAY.getFullYear(),TODAY.getMonth(),1);
   selDay=new Date(TODAY); renderCal();
