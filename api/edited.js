@@ -3,8 +3,9 @@
 // A video counts once, on the day its first cut went for review (the earlier of
 // Sent For Review At and Draft Submitted At in EDIT TRACKER). Sponsor edits that
 // never got logged in EDIT TRACKER are picked up from the creator boards: a
-// sponsor card with an editor, sitting at 8 (Changes) or 9 (Approval), that was
-// touched this week and has no matching EDIT TRACKER row. Those are flagged as
+// sponsor card with an editor, sitting at 9 (Approval), that was
+// touched this week and has no matching EDIT TRACKER row. Cards sitting at
+// 8 (Changes) are revision rounds on an earlier cut, so they don't count. Those are flagged as
 // "not logged" so the team can see what skipped the tracker.
 
 import { NOTION, BOARDS, headers, notionFetch } from './_boards.js';
@@ -136,7 +137,7 @@ async function build(fromDay) {
         Object.values(pr).find(x => x && x.type === 'status');
       const stage = stageOf(plain(statusP));
       const editor = plain(byName(pr, /editor/i));
-      if ((stage === 8 || stage === 9) && editor && p.last_edited_time >= fromISO &&
+      if (stage === 9 && editor && p.last_edited_time >= fromISO &&
           !tracker.some(t => sameVideo(t.title, title))) {
         untracked.push({ creator: b.creator, title, editor, stage, id: p.id });
       }
