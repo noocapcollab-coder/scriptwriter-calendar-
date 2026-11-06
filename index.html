@@ -527,10 +527,9 @@ function renderWeek(){
     var late=all.filter(function(v){return v.stage<12&&pdate(v)<TODAY}).length;
     return {c:c,done:all.filter(function(v){return v.stage>=12}).length,all:all.length,late:late};
   }).filter(function(r){return r.all}).sort(function(a,b){return (a.done/a.all)-(b.done/b.all)});
-  box.innerHTML=head('This week <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+posted.length+' of '+wk.length+' posted</span>',
+  box.innerHTML=head('This week',
       'Mon '+dmy(from)+' to Sat '+dmy(addD(from,5)))+
     '<div class="big">'+
-      '<div><b style="color:var(--green)">'+posted.length+'<small>of '+wk.length+'</small></b><span>videos posted</span></div>'+
       '<div><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
       editedStat(from)+
     '</div>'+
