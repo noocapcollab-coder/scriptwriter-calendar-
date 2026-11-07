@@ -91,6 +91,11 @@ h1{font-size:23px;font-weight:600;margin:0}
 .k-p{background:#1a1f2c;color:var(--tx2)}
 .k-l{background:rgba(167,139,250,.15);color:#b9a5fb}
 .k-sh{background:#1a1f2c;color:var(--tx2)}
+.k-p{background:rgba(74,222,128,.12);color:#86e0a5}
+.k-r{background:rgba(250,204,21,.13);color:#e8cf6a}
+.k-n{background:rgba(241,107,107,.12);color:#f19b9b}
+.ecr{display:flex;flex-wrap:wrap;gap:6px 18px;padding:4px 20px 12px;font-size:12.5px;color:var(--tx2)}
+.ecr b{color:var(--tx);font-weight:600}
 .day.past{opacity:.5}
 .day.today{border-color:var(--blue)}
 .chd{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -458,9 +463,9 @@ function renderSession(){
 }
 
 // One row in the HQ style: a tag on the left, the title with a status line, and an Open card button
-function nrow(v,tag,cls,sub){
+function nrow(v,tag,cls,sub,chip){
   return '<div class="nrow"><span class="tag '+cls+'">'+esc(tag)+'</span>'+
-    '<div class="ti">'+kindChip(v)+esc(v.creator)+': '+esc(v.title)+'<small>'+esc(sub)+'</small></div>'+
+    '<div class="ti">'+(chip!=null?chip:kindChip(v))+esc(v.creator)+': '+esc(v.title)+'<small>'+esc(sub)+'</small></div>'+
     '<a class="ob" href="'+notionURL(v.id)+'" target="_blank" rel="noopener"><button class="ob">Open card</button></a></div>';
 }
 var SHOWALL={};
@@ -535,24 +540,65 @@ function toEditLists(){
 }
 function editWord(v){
   var e=v.editor?' ('+v.editor+')':'';
+  if(v.stage<=5&&noTopic(v)) return 'Empty slot: no topic picked yet';
   return v.stage<=5?'Script not ready ('+label(v.stage)+')':v.stage===6?'Not filmed yet':v.stage===7?'In edit'+e:'Brand or team changes'+e;
+}
+// What a video is for: the type tag on the card (Sponsor, Personal, Repost, Trial, Carousel), or "No type"
+// A planned slot with no topic yet: the card is titled NA (or N/A)
+function noTopic(v){return /^\s*(n\/?a|tbd|-)?\s*$/i.test(v.title||'')}
+function typeOf(v){
+  var t=(v.tags||[]).join(' ');
+  if(v.kind==='Sponsor') return 'Sponsor';
+  if(v.stage===13||/repost/i.test(t)) return 'Repost';
+  if(/trial/i.test(t)) return 'Trial';
+  if(/carousel/i.test(t)) return 'Carousel';
+  if(v.kind==='Personal') return 'Personal';
+  return 'No type';
+}
+function typeChip(v){
+  var k=typeOf(v), c=k==='Sponsor'?'k-s':k==='Repost'?'k-r':k==='No type'?'k-n':k==='Personal'?'k-p':'k-sh';
+  return '<span class="k '+c+'">'+esc(k)+'</span>';
+}
+// Every video planned in the window, whatever its stage (posted, ready, reposts too)
+// "63 personal · 2 sponsor · 5 trial · 4 repost · 3 carousel · 6 with no type"
+var TYPE_ORDER=['Personal','Sponsor','Trial','Repost','Carousel','No type'];
+function typeCounts(list){
+  var n={}; list.forEach(function(v){var k=typeOf(v);n[k]=(n[k]||0)+1});
+  return TYPE_ORDER.filter(function(k){return n[k]}).map(function(k){
+    return k==='No type'?'<span style="color:var(--amber)">'+n[k]+' with no type on the card</span>':n[k]+' '+k.toLowerCase()}).join(' · ');
+}
+function plannedIn(w){return VALL.filter(function(v){var p=pdate(v);return p&&p>=w.from&&p<w.to})}
+function plannedStat(){
+  var L=toEditLists(), all=plannedIn(L.w);
+  var ready=all.filter(function(v){return v.stage>=9&&v.stage<=11}).length,
+      done=all.filter(function(v){return v.stage===12}).length,
+      rep=all.filter(function(v){return v.stage===13}).length;
+  var bits=[L.due.length+' to edit'];
+  if(ready) bits.push(ready+' edited, ready to post'); if(done) bits.push(done+' posted'); if(rep) bits.push(rep+' at the Repost stage');
+  return '<div><b>'+all.length+'</b><span>videos planned · '+span(L.w.from,L.w.to)+'</span>'+
+    '<span>'+bits.join(' · ')+'</span>'+
+    '<span>'+typeCounts(all)+'</span>'+
+    '</div>';
 }
 function toEditStat(){
   var L=toEditLists(), d=L.due;
-  var scr=d.filter(function(v){return v.stage<=5}).length, film=d.filter(function(v){return v.stage===6}).length, edit=d.filter(function(v){return v.stage===7}).length, ch=d.filter(function(v){return v.stage===8}).length;
+  var nt=d.filter(function(v){return v.stage<=5&&noTopic(v)}).length, scr=d.filter(function(v){return v.stage<=5}).length, film=d.filter(function(v){return v.stage===6}).length, edit=d.filter(function(v){return v.stage===7}).length, ch=d.filter(function(v){return v.stage===8}).length;
   return '<div><b style="color:var(--blue)">'+d.length+'</b><span>videos to edit · '+span(L.w.from,L.w.to)+'</span>'+
-    '<span>'+scr+' still scripting · '+film+' not filmed · '+edit+' in edit · '+ch+' changes</span>'+
+    '<span>'+scr+' still scripting'+(nt?' ('+nt+' with no topic yet)':'')+' · '+film+' not filmed · '+edit+' in edit · '+ch+' changes</span>'+
     (L.late.length?'<span style="color:var(--red)">+ '+L.late.length+' late (post date passed)</span>':'')+
     '</div>';
 }
 function renderToEdit(ob){
   var L=toEditLists();
   ob.style.display='';
+  var who={}; L.due.forEach(function(v){(who[v.creator]=who[v.creator]||[]).push(v)});
+  var crs='<div class="ecr">'+Object.keys(who).sort(function(a,b){return who[b].length-who[a].length}).map(function(c){
+    return '<span><b>'+esc(c)+' '+who[c].length+'</b> ('+typeCounts(who[c])+')</span>'}).join('')+'</div>';
   var rows=L.due.map(function(v){var p=pdate(v);
-      return nrow(v,same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage<=5?'c-r':v.stage===6?'c-n':'c-a',editWord(v))})
-    .concat(L.late.map(function(v){return nrow(v,'Was due '+shortDay(pdate(v)),'c-r',editWord(v))}));
+      return nrow(v,same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage<=5?'c-r':v.stage===6?'c-n':'c-a',editWord(v),typeChip(v)+(v.format==='Long'?'<span class="k k-l">Long</span>':''))})
+    .concat(L.late.map(function(v){return nrow(v,'Was due '+shortDay(pdate(v)),'c-r',editWord(v),typeChip(v))}));
   ob.innerHTML=head('To edit <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+L.due.length+' due '+span(L.w.from,L.w.to)+(L.late.length?' · '+L.late.length+' late':'')+'</span>','not edited yet, from scripting to changes, by post date')+
-    (rows.length?capped('toedit',rows):'<div class="crow" style="color:var(--tx3)">Nothing to edit in this window</div>')+'<div class="pad"></div>';
+    crs+(rows.length?capped('toedit',rows):'<div class="crow" style="color:var(--tx3)">Nothing to edit in this window</div>')+'<div class="pad"></div>';
 }
 
 // This week (Monday to Saturday): how many videos went out, and which ones
@@ -575,6 +621,7 @@ function renderWeek(){
     '<div class="big">'+
       '<div><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
       editedStat(from)+
+      plannedStat()+
       toEditStat()+
     '</div>'+
     per.map(function(r){
