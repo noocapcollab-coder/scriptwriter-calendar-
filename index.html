@@ -171,6 +171,12 @@ button:hover{border-color:#3a3f48;background:var(--panel2)}
 .big b{font:600 30px/1.1 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
 .big b small{font:500 15px 'IBM Plex Sans',sans-serif;color:var(--tx2);margin-left:4px}
 .big div>span{display:block;color:var(--tx2);font-size:12.5px;margin-top:3px}
+.big>div.pick{cursor:pointer;padding:8px 12px;margin:-8px -12px;border-radius:10px;border:1px solid transparent;transition:background .15s,border-color .15s}
+.big>div.pick:hover{background:rgba(255,255,255,.03)}
+.big>div.pick.on{background:rgba(255,255,255,.045);border-color:var(--line,#2a2f3a)}
+.big .latepick{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.wkhd{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 20px 4px;border-top:1px solid var(--line,#23283a);font-size:13.5px}
+.wkhd b{font-weight:600}.wkhd span{color:var(--tx3)}
 .wrow{display:grid;grid-template-columns:minmax(0,1fr) 110px 46px;gap:12px;align-items:center;padding:9px 20px;border-top:1px solid var(--line3);font-size:14.5px}
 .wrow b{font-weight:600}
 .wrow small{color:var(--tx2);font-size:12.5px;margin-left:6px}
@@ -511,7 +517,7 @@ function editedStat(from){
     .map(function(n){return n+' '+e.byEditor[n]}).join(' · ');
   var miss=e.untracked.length;
   var tip=miss?' title="Not in EDIT TRACKER: '+esc(e.untracked.map(function(u){return u.creator+': '+u.title+' ('+u.editor+')'}).join('; '))+'"':'';
-  return '<div'+tip+'><b style="color:var(--green)">'+e.total+'</b><span>videos edited · '+parts.join(', ')+'</span>'+
+  return '<div'+tip+' class="pick'+(WKVIEW==='edited'?' on':'')+'" onclick="pickWk(\'edited\')"><b style="color:var(--green)">'+e.total+'</b><span>videos edited · '+parts.join(', ')+'</span>'+
     '<span>'+esc(eds)+'</span>'+
     (miss?'<span style="color:var(--amber)">'+miss+' sponsor edit'+(miss===1?'':'s')+' not logged in EDIT TRACKER</span>':'')+
     '</div>';
@@ -575,7 +581,7 @@ function plannedStat(){
       rep=all.filter(function(v){return v.stage===13}).length;
   var bits=[L.due.length+' to edit'];
   if(ready) bits.push(ready+' edited, ready to post'); if(done) bits.push(done+' posted'); if(rep) bits.push(rep+' at the Repost stage');
-  return '<div><b>'+all.length+'</b><span>videos planned · '+span(L.w.from,L.w.to)+'</span>'+
+  return '<div class="pick'+(WKVIEW==='planned'?' on':'')+'" onclick="pickWk(\'planned\')"><b>'+all.length+'</b><span>videos planned · '+span(L.w.from,L.w.to)+'</span>'+
     '<span>'+bits.join(' · ')+'</span>'+
     '<span>'+typeCounts(all)+'</span>'+
     '</div>';
@@ -583,10 +589,48 @@ function plannedStat(){
 function toEditStat(){
   var L=toEditLists(), d=L.due;
   var nt=d.filter(function(v){return v.stage<=5&&noTopic(v)}).length, scr=d.filter(function(v){return v.stage<=5}).length, film=d.filter(function(v){return v.stage===6}).length, edit=d.filter(function(v){return v.stage===7}).length, ch=d.filter(function(v){return v.stage===8}).length;
-  return '<div><b style="color:var(--blue)">'+d.length+'</b><span>videos to edit · '+span(L.w.from,L.w.to)+'</span>'+
+  return '<div class="pick'+(WKVIEW==='toedit'||WKVIEW==='late'?' on':'')+'" onclick="pickWk(\'toedit\')"><b style="color:var(--blue)">'+d.length+'</b><span>videos to edit · '+span(L.w.from,L.w.to)+'</span>'+
     '<span>'+scr+' still scripting'+(nt?' ('+nt+' with no topic yet)':'')+' · '+film+' not filmed · '+edit+' in edit · '+ch+' changes</span>'+
-    (L.late.length?'<span style="color:var(--red)">+ '+L.late.length+' late (post date passed)</span>':'')+
+    (L.late.length?'<span class="latepick" style="color:var(--red)" onclick="event.stopPropagation();pickWk(\'late\')">+ '+L.late.length+' late (post date passed)</span>':'')+
     '</div>';
+}
+// Click a number in "This week" and its videos show below it (Harsh, Nov 7)
+var WKVIEW='toedit';
+function pickWk(v){WKVIEW=v;render()}
+function byCreatorLine(list){
+  var who={}; list.forEach(function(v){(who[v.creator]=who[v.creator]||[]).push(v)});
+  return '<div class="ecr">'+Object.keys(who).sort(function(a,b){return who[b].length-who[a].length}).map(function(c){
+    return '<span><b>'+esc(c)+' '+who[c].length+'</b> ('+typeCounts(who[c])+')</span>'}).join('')+'</div>';
+}
+function postTag(v){var p=pdate(v);if(!p)return['No post date','c-n'];
+  if(p<TODAY)return['Was due '+shortDay(p),'c-r'];return[same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage>=9?'c-g':v.stage<=5?'c-r':v.stage===6?'c-n':'c-a']}
+function stageWord(v){
+  if(v.stage>=12) return v.stage===13?'At the Repost stage':'Posted';
+  if(v.stage>=9) return v.stage===9?'Edited, waiting for approval':'Edited, ready to post';
+  return editWord(v);
+}
+function wkPanel(open){
+  var L=toEditLists(), title, sub, list, rows, extra='';
+  if(WKVIEW==='edited'){
+    var e=EDITED&&EDITED.videos?EDITED:null;
+    title='Videos edited this week'; sub=e?e.total+' sent for review since Monday':'loading';
+    var vids=e?e.videos.slice().sort(function(a,b){return String(b.at||'').localeCompare(String(a.at||''))}):[];
+    rows=vids.map(function(x){
+      var c=x.kind==='Sponsor'?'k-s':x.kind==='Long'?'k-l':'k-p';
+      var when=x.at?shortDay(startOfDay(new Date(x.at))):'not in tracker';
+      return nrow(x,'Edited '+when,x.untracked?'c-a':'c-g','Edited by '+(x.editor||'no editor set')+(x.untracked?' · not logged in EDIT TRACKER':''),'<span class="k '+c+'">'+esc(x.kind)+'</span>')});
+    var who={};vids.forEach(function(x){who[x.creator]=(who[x.creator]||0)+1});
+    extra='<div class="ecr">'+Object.keys(who).sort(function(a,b){return who[b]-who[a]}).map(function(c){return '<span><b>'+esc(c)+' '+who[c]+'</b></span>'}).join('')+'</div>';
+  } else {
+    if(WKVIEW==='making'){ list=open.filter(function(v){return v.stage>=6&&v.stage<=9}); title='Still filming, editing or in review'; sub='planned Mon to Sat this week'; }
+    else if(WKVIEW==='planned'){ list=plannedIn(L.w).sort(function(a,b){return pdate(a)-pdate(b)||a.stage-b.stage}); title='Videos planned'; sub=span(L.w.from,L.w.to)+', every stage'; }
+    else if(WKVIEW==='late'){ list=L.late; title='Late: post date passed, still not edited'; sub='last 30 days'; }
+    else { list=L.due; title='Videos to edit'; sub=span(L.w.from,L.w.to)+', from scripting to changes'; }
+    extra=byCreatorLine(list);
+    rows=list.map(function(v){var t=postTag(v);return nrow(v,t[0],t[1],stageWord(v),typeChip(v)+(v.format==='Long'?'<span class="k k-l">Long</span>':''))});
+  }
+  return '<div class="wkhd"><b>'+esc(title)+' · '+rows.length+'</b><span>'+esc(sub)+'</span></div>'+extra+
+    (rows.length?capped('wk-'+WKVIEW,rows):'<div class="crow" style="color:var(--tx3)">Nothing here</div>');
 }
 function renderToEdit(ob){
   var L=toEditLists();
@@ -619,18 +663,14 @@ function renderWeek(){
   box.innerHTML=head('This week',
       'Mon '+dmy(from)+' to Sat '+dmy(addD(from,5)))+
     '<div class="big">'+
-      '<div><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
+      '<div class="pick'+(WKVIEW==='making'?' on':'')+'" onclick="pickWk(\'making\')"><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
       editedStat(from)+
       plannedStat()+
       toEditStat()+
     '</div>'+
-    per.map(function(r){
-      var pct=Math.round(r.done/r.all*100), col=r.done>=r.all?'var(--green)':(r.late?'var(--red)':'var(--amber)');
-      return '<div class="wrow"><span><b>'+esc(r.c)+'</b>'+(r.late?'<small>'+r.late+' late</small>':'')+'</span>'+
-        '<div class="tr"><div style="width:'+pct+'%;background:'+col+'"></div></div>'+
-        '<span class="n">'+r.done+'/'+r.all+'</span></div>';
-    }).join('')+'<div class="pad"></div>';
-  renderToEdit(ob); return;
+    wkPanel(open)+'<div class="pad"></div>';
+  ob.style.display='none'; return; // the list now opens under the number you click
+
   ob.innerHTML=head('Not posted yet <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+open.length+' this week</span>','planned for Mon to Sat, still being made')+
     capped('open',open.map(function(v){
       var p=pdate(v), late=p<TODAY, today=same(p,TODAY), s=v.stage;

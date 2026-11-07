@@ -112,7 +112,8 @@ async function build(fromDay) {
       editor: plain(pr['Editor']),
       sponsor: /sponsor/i.test(plain(pr['TYPE'])),
       long: /long/i.test(plain(pr['CONTENT TYPE'])),
-      at: new Date(first).toISOString()
+      at: new Date(first).toISOString(),
+      id: p.id
     });
   }
 
@@ -161,6 +162,9 @@ async function build(fromDay) {
     long,
     inTracker: tracker.length,
     untracked,
+    // every edited video, so the page can list them when the number is clicked
+    videos: tracker.map(t => ({ id: t.id, title: t.title, creator: t.creator, editor: tidy(t.editor), kind: t.long ? 'Long' : t.sponsor ? 'Sponsor' : 'Personal', at: t.at }))
+      .concat(untracked.map(u => ({ id: u.id, title: u.title, creator: u.creator, editor: tidy(u.editor), kind: 'Sponsor', at: null, untracked: true }))),
     byEditor,
     problems,
     syncedAt: new Date().toISOString()
