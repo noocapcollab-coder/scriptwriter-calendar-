@@ -19,7 +19,8 @@ export const BOARDS = [
   // Nicole's dashboard only holds linked "View of…" copies, so point straight at
   // the source: NICOLE'S CONTENT DATABASE (Client Portals / TEMPLATE DATABASE).
   // It mixes short and long form; each row's Format column decides which.
-  { creator: 'Nicole',    ds: '25b449d2-35ba-4026-992e-39af9974b158', format: 'Short' },
+  // Nicole stopped working with NOOCAP on 7 Nov 2026, so her board is off the calendar.
+  // { creator: 'Nicole',    ds: '25b449d2-35ba-4026-992e-39af9974b158', format: 'Short' },
   // DAVID IYA CONTENT PLANNER, the source board on his dashboard. Pointing at
   // the board itself, because looking it up through the dashboard page broke.
   // His team schedules on DUE DATE (what his Notion calendar shows), so pin it.

@@ -106,6 +106,7 @@ async function build(fromDay) {
     if (!times.length) continue;
     const first = Math.min(...times);
     if (first < Date.parse(fromISO) || first >= Date.parse(toISO)) continue;
+    if (/nicole/i.test(plain(pr['Creator']))) continue; // no longer a client (7 Nov 2026)
     tracker.push({
       title: titleOf(pr),
       creator: plain(pr['Creator']),
