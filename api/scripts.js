@@ -34,9 +34,11 @@ function findStatus(props) {
 function findPostDate(props, prefer) {
   // A board that names its date column uses only that column, so a stale
   // value in some other date field can't leak onto the calendar.
+  // If that column is empty on a card, the card's own post date still counts (David's filmed cards carry only
+  // POST DATE, so they dropped off the calendar and the "to edit" count, Nov 7).
   if (prefer && props[prefer] && props[prefer].type === 'date') {
     const d = props[prefer].date;
-    return d && d.start ? d.start : null;
+    if (d && d.start) return d.start;
   }
   let fallback = null;
   for (const k in props) {

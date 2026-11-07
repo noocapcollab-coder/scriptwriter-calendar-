@@ -524,8 +524,10 @@ function editWindow(){
 }
 function toEditLists(){
   var w=editWindow(), floor=addD(TODAY,-30);
+  // Everything posting in the window that hasn't been edited yet, scripts included: a video still at idea or
+  // script stage needs an edit before it posts just the same (Harsh, Nov 7: "it doesn't look like only 32")
   var ed=VALL.filter(function(v){return v.stage>=6&&v.stage<=8});
-  var due=ed.filter(function(v){var p=pdate(v);return p&&p>=w.from&&p<w.to})
+  var due=VALL.filter(function(v){return v.stage>=1&&v.stage<=8}).filter(function(v){var p=pdate(v);return p&&p>=w.from&&p<w.to})
     .sort(function(a,b){return pdate(a)-pdate(b)||b.stage-a.stage});
   var late=ed.filter(function(v){var p=pdate(v);return p&&p<TODAY&&p>=floor})
     .sort(function(a,b){return pdate(a)-pdate(b)});
@@ -533,13 +535,13 @@ function toEditLists(){
 }
 function editWord(v){
   var e=v.editor?' ('+v.editor+')':'';
-  return v.stage===6?'Not filmed yet':v.stage===7?'In edit'+e:'Brand or team changes'+e;
+  return v.stage<=5?'Script not ready ('+label(v.stage)+')':v.stage===6?'Not filmed yet':v.stage===7?'In edit'+e:'Brand or team changes'+e;
 }
 function toEditStat(){
   var L=toEditLists(), d=L.due;
-  var film=d.filter(function(v){return v.stage===6}).length, edit=d.filter(function(v){return v.stage===7}).length, ch=d.filter(function(v){return v.stage===8}).length;
+  var scr=d.filter(function(v){return v.stage<=5}).length, film=d.filter(function(v){return v.stage===6}).length, edit=d.filter(function(v){return v.stage===7}).length, ch=d.filter(function(v){return v.stage===8}).length;
   return '<div><b style="color:var(--blue)">'+d.length+'</b><span>videos to edit · '+span(L.w.from,L.w.to)+'</span>'+
-    '<span>'+film+' not filmed yet · '+edit+' in edit · '+ch+' changes</span>'+
+    '<span>'+scr+' still scripting · '+film+' not filmed · '+edit+' in edit · '+ch+' changes</span>'+
     (L.late.length?'<span style="color:var(--red)">+ '+L.late.length+' late (post date passed)</span>':'')+
     '</div>';
 }
@@ -547,9 +549,9 @@ function renderToEdit(ob){
   var L=toEditLists();
   ob.style.display='';
   var rows=L.due.map(function(v){var p=pdate(v);
-      return nrow(v,same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage===6?'c-n':'c-a',editWord(v))})
+      return nrow(v,same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage<=5?'c-r':v.stage===6?'c-n':'c-a',editWord(v))})
     .concat(L.late.map(function(v){return nrow(v,'Was due '+shortDay(pdate(v)),'c-r',editWord(v))}));
-  ob.innerHTML=head('To edit <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+L.due.length+' due '+span(L.w.from,L.w.to)+(L.late.length?' · '+L.late.length+' late':'')+'</span>','to film, in edit or changes, by post date')+
+  ob.innerHTML=head('To edit <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+L.due.length+' due '+span(L.w.from,L.w.to)+(L.late.length?' · '+L.late.length+' late':'')+'</span>','not edited yet, from scripting to changes, by post date')+
     (rows.length?capped('toedit',rows):'<div class="crow" style="color:var(--tx3)">Nothing to edit in this window</div>')+'<div class="pad"></div>';
 }
 
