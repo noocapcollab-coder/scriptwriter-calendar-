@@ -512,6 +512,47 @@ function editedStat(from){
     '</div>';
 }
 
+// Videos to edit: cards at 6 (to film), 7 (in edit) or 8 (changes) that post
+// from today to Sunday. On a Saturday or Sunday the week is nearly over, so the
+// window runs to the end of next week instead (Harsh, Nov 7: "we really don't
+// know how many videos need to be edited this week"). Cards whose post date has
+// already gone by in the last 30 days are counted as late, on top.
+function editWindow(){
+  var end=addD(mondayOf(TODAY),7), d=TODAY.getDay();
+  if(d===6||d===0) end=addD(end,7);
+  return {from:TODAY,to:end};
+}
+function toEditLists(){
+  var w=editWindow(), floor=addD(TODAY,-30);
+  var ed=VALL.filter(function(v){return v.stage>=6&&v.stage<=8});
+  var due=ed.filter(function(v){var p=pdate(v);return p&&p>=w.from&&p<w.to})
+    .sort(function(a,b){return pdate(a)-pdate(b)||b.stage-a.stage});
+  var late=ed.filter(function(v){var p=pdate(v);return p&&p<TODAY&&p>=floor})
+    .sort(function(a,b){return pdate(a)-pdate(b)});
+  return {w:w,due:due,late:late};
+}
+function editWord(v){
+  var e=v.editor?' ('+v.editor+')':'';
+  return v.stage===6?'Not filmed yet':v.stage===7?'In edit'+e:'Brand or team changes'+e;
+}
+function toEditStat(){
+  var L=toEditLists(), d=L.due;
+  var film=d.filter(function(v){return v.stage===6}).length, edit=d.filter(function(v){return v.stage===7}).length, ch=d.filter(function(v){return v.stage===8}).length;
+  return '<div><b style="color:var(--blue)">'+d.length+'</b><span>videos to edit · '+span(L.w.from,L.w.to)+'</span>'+
+    '<span>'+film+' not filmed yet · '+edit+' in edit · '+ch+' changes</span>'+
+    (L.late.length?'<span style="color:var(--red)">+ '+L.late.length+' late (post date passed)</span>':'')+
+    '</div>';
+}
+function renderToEdit(ob){
+  var L=toEditLists();
+  ob.style.display='';
+  var rows=L.due.map(function(v){var p=pdate(v);
+      return nrow(v,same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage===6?'c-n':'c-a',editWord(v))})
+    .concat(L.late.map(function(v){return nrow(v,'Was due '+shortDay(pdate(v)),'c-r',editWord(v))}));
+  ob.innerHTML=head('To edit <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+L.due.length+' due '+span(L.w.from,L.w.to)+(L.late.length?' · '+L.late.length+' late':'')+'</span>','to film, in edit or changes, by post date')+
+    (rows.length?capped('toedit',rows):'<div class="crow" style="color:var(--tx3)">Nothing to edit in this window</div>')+'<div class="pad"></div>';
+}
+
 // This week (Monday to Saturday): how many videos went out, and which ones
 // planned for this week are still being made (filming, edit, changes, approval).
 function renderWeek(){
@@ -532,6 +573,7 @@ function renderWeek(){
     '<div class="big">'+
       '<div><b style="color:'+(making?'var(--amber)':'var(--green)')+'">'+making+'</b><span>still filming, editing or in review</span></div>'+
       editedStat(from)+
+      toEditStat()+
     '</div>'+
     per.map(function(r){
       var pct=Math.round(r.done/r.all*100), col=r.done>=r.all?'var(--green)':(r.late?'var(--red)':'var(--amber)');
@@ -539,7 +581,7 @@ function renderWeek(){
         '<div class="tr"><div style="width:'+pct+'%;background:'+col+'"></div></div>'+
         '<span class="n">'+r.done+'/'+r.all+'</span></div>';
     }).join('')+'<div class="pad"></div>';
-  ob.style.display='none'; return; // removed from the page
+  renderToEdit(ob); return;
   ob.innerHTML=head('Not posted yet <span class="sub" style="font:400 13px \'IBM Plex Sans\',sans-serif">'+open.length+' this week</span>','planned for Mon to Sat, still being made')+
     capped('open',open.map(function(v){
       var p=pdate(v), late=p<TODAY, today=same(p,TODAY), s=v.stage;

@@ -142,6 +142,7 @@ function toVideo(page, board) {
         kind: findKind(tags),
         format: findFormat(tags) || board.format || 'Short',
         tags,
+        editor: (() => { for (const k in props) { const q = props[k]; if (q && /editor/i.test(k)) { if (q.type === 'select' && q.select) return q.select.name; if (q.type === 'people') return (q.people || []).map((x) => x.name || '').filter(Boolean).join(', '); } } return ''; })(),
         postDate: findPostDate(props, board.dateProp)
       };
 }
