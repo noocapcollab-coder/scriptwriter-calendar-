@@ -83,6 +83,8 @@ async function queryAll(ds, filter) {
   return out;
 }
 
+const NO_TRACKER = new Set(['AI Learns']);
+
 async function boardRows(board, sinceISO) {
   const snap = await snapshotRows(board.ds);
   if (snap) return snap.filter(p => p.last_edited_time >= sinceISO);
@@ -124,6 +126,7 @@ async function build(fromDay) {
   const sponsorTitles = [];
   const untracked = [];
   const problems = [];
+  const boardEdited = [];
   for (const b of BOARDS) {
     let list;
     try { list = await boardRows(b, sinceBoards); }
@@ -131,6 +134,19 @@ async function build(fromDay) {
     for (const p of list) {
       if (p.archived || p.in_trash) continue;
       const pr = p.properties || {};
+      // Boards whose editors never log in EDIT TRACKER (AI Learns): a card counts as edited this week when it
+      // reached 9 or later and its post date falls in the week (Harsh, Nov 7: "add AI Learns in this")
+      if (NO_TRACKER.has(b.creator)) {
+        const stP = byName(pr, /status/i, ['status', 'select']) || Object.values(pr).find(x => x && x.type === 'status');
+        const st = stageOf(plain(stP));
+        const dateP = Object.entries(pr).find(([k, x]) => x && x.type === 'date' && /post/i.test(k) && x.date && x.date.start);
+        const pd = dateP ? Date.parse(dateP[1].date.start.length === 10 ? dateP[1].date.start + 'T12:00:00+05:30' : dateP[1].date.start) : NaN;
+        const t = titleOf(pr);
+        if (t && st >= 9 && st <= 12 && pd >= Date.parse(fromISO) && pd < Date.parse(toISO)) {
+          boardEdited.push({ title: t, creator: b.creator, editor: plain(byName(pr, /editor/i)), sponsor: isSponsor(pr), long: false, at: null, id: p.id, fromBoard: true });
+        }
+        continue;
+      }
       if (!isSponsor(pr)) continue;
       const title = titleOf(pr);
       if (!title) continue;
@@ -146,6 +162,7 @@ async function build(fromDay) {
     }
   }
   for (const t of tracker) if (!t.sponsor && sponsorTitles.some(s => sameVideo(s, t.title))) t.sponsor = true;
+  tracker.push(...boardEdited);
 
   const tidy = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : ''; };
   const byEditor = {};
