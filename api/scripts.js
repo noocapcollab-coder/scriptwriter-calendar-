@@ -91,8 +91,9 @@ function titleOf(props) {
 function stageOf(label) {
   if (!label) return null;
   if (/archive/i.test(label)) return 'archive';
-  const m = String(label).match(/^\s*(\d{1,2})/);
-  return m ? parseInt(m[1], 10) : null;
+  // Half steps are real stages: 4.5 Internal Review, 6.5 Ready to Edit (filmed, waiting for the editor)
+  const m = String(label).match(/^\s*(\d{1,2}(?:\.5)?)/);
+  return m ? parseFloat(m[1]) : null;
 }
 
 // Only cards edited in the last 120 days are fetched. Old posted videos make

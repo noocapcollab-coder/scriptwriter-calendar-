@@ -52,8 +52,8 @@ function sameVideo(a, b) {
   return x === y || (x.length >= 5 && y.startsWith(x)) || (y.length >= 5 && x.startsWith(y));
 }
 function stageOf(label) {
-  const m = String(label || '').match(/^\s*(\d{1,2})/);
-  return m ? parseInt(m[1], 10) : null;
+  const m = String(label || '').match(/^\s*(\d{1,2}(?:\.5)?)/);
+  return m ? parseFloat(m[1]) : null;
 }
 function isSponsor(props) {
   for (const k in props) {

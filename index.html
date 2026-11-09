@@ -272,8 +272,8 @@ button:hover{border-color:#3a3f48;background:var(--panel2)}
 </div>
 
 <script>
-var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script draft',
-5:'script approval',6:'to film',7:'in edit',8:'changes',9:'approval',10:'to post',
+var STAGES = {1:'idea assigned',2:'waiting for brief',3:'transcript',4:'script draft',4.5:'internal review',
+5:'script approval',6:'to film',6.5:'ready to edit',7:'in edit',8:'changes',9:'approval',10:'to post',
 11:'ready',12:'posted',13:'repost'};
 
 var V=[], VALL=[], RATE={}, CREATORS=[];
@@ -495,7 +495,7 @@ function numberSections(){
     var b=el.querySelector('.num'); if(b) b.textContent=++n;
   });
 }
-function stageWord(s){return s>=12?'Posted':s>=10?'Ready to post':s>=8?'In review':s===7?'In edit':s===6?'Filming':s===5?'Script approval':'Scripting'}
+function stageWord(s){return s>=12?'Posted':s>=10?'Ready to post':s>=8?'In review':s===7?'In edit':s===6.5?'Ready to edit':s===6?'Filming':s===5?'Script approval':'Scripting'}
 
 // Videos edited this week: every cut that went for review Mon–Sun (EDIT TRACKER),
 // plus sponsor edits on the boards that never got logged there. Fetched once per
@@ -545,7 +545,7 @@ function toEditLists(){
 function editWord(v){
   var e=v.editor?' ('+v.editor+')':'';
   if(v.stage<=5&&noTopic(v)) return 'Empty slot: no topic picked yet';
-  return v.stage<=5?'Script not ready ('+label(v.stage)+')':v.stage===6?'Not filmed yet':v.stage===7?'In edit'+e:'Brand or team changes'+e;
+  return v.stage<=5?'Script not ready ('+label(v.stage)+')':v.stage===6?'Not filmed yet':v.stage===6.5?'Filmed, waiting for an editor':v.stage===7?'In edit'+e:'Brand or team changes'+e;
 }
 // What a video is for: the type tag on the card (Sponsor, Personal, Repost, Trial, Carousel), or "No type"
 // A planned slot with no topic yet: the card is titled NA (or N/A)
@@ -587,9 +587,10 @@ function plannedStat(){
 function toEditStat(){
   var L=toEditLists(), d=L.due, all=plannedIn(L.w);
   var scr=d.filter(function(v){return v.stage<=5}).length, film=d.filter(function(v){return v.stage===6}).length,
+      rte=d.filter(function(v){return v.stage===6.5}).length,
       withEd=d.filter(function(v){return v.stage===7||v.stage===8}).length;
   return '<div class="pick'+(WKVIEW==='toedit'?' on':'')+'" onclick="pickWk(\'toedit\')"><b style="color:var(--blue)">'+d.length+'</b><span>videos to edit</span>'+
-    '<span>'+scr+' still scripting · '+film+' not filmed · '+withEd+' with an editor</span>'+
+    '<span>'+scr+' still scripting · '+film+' not filmed · '+(rte?rte+' filmed, ready to edit · ':'')+withEd+' with an editor</span>'+
     '<span class="latepick" onclick="event.stopPropagation();pickWk(\'planned\')">of '+all.length+' planned in total</span>'+
     '</div>';
 }
