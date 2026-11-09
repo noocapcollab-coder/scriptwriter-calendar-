@@ -74,7 +74,8 @@ export default async function handler(req, res) {
   const title = String(body.title || '').trim().slice(0, 200);
   const creator = String(body.creator || '').trim();
   const date = String(body.date || '').trim();
-  const type = body.type === 'Sponsor' ? 'Sponsor' : 'Personal';
+  const TYPES = { Sponsor: 'Sponsor', Personal: 'Personal', Repost: 'Repost', Trials: 'Trials?' };
+  const type = TYPES[body.type] ? body.type : 'Personal';
 
   if (!title) return res.status(400).json({ error: 'A title is required' });
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
@@ -99,7 +100,13 @@ export default async function handler(req, res) {
     const dateKey = date ? pickDate(props, board.dateProp) : null;
     if (dateKey) properties[dateKey] = { date: { start: date } };
 
-    const t = pickType(props, type);
+    // Repost and Trials live in the same type column as Personal/Sponsor; if a board doesn't have that option yet,
+    // it is added on the fly (Notion creates a select option when a page is written with a new name)
+    let t = pickType(props, TYPES[type]);
+    if (!t && (type === 'Repost' || type === 'Trials')) {
+      const col = pickType(props, 'Personal') || pickType(props, 'Sponsor');
+      if (col) t = { key: col.key, type: col.type, option: /^[A-Z]+$/.test(col.option) ? type.toUpperCase() : type };
+    }
     if (t) properties[t.key] = t.type === 'select'
       ? { select: { name: t.option } }
       : { multi_select: [{ name: t.option }] };
