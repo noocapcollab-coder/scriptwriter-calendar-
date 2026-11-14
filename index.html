@@ -167,6 +167,7 @@ button:hover{border-color:#3a3f48;background:var(--panel2)}
 .nrow .ti{min-width:0;font-size:14.5px}
 .nrow .ti small{display:block;color:var(--tx2);font-size:12.5px;margin-top:3px}
 .nrow .ob{white-space:nowrap;font-size:13.5px;padding:8px 18px}
+.crp{cursor:pointer;border-radius:6px;padding:2px 6px;margin:-2px -6px}.crp:hover{background:rgba(255,255,255,.06)}.crp.on{background:rgba(78,212,160,.16);color:var(--green)}
 .big{display:flex;gap:40px;flex-wrap:wrap;padding:6px 20px 14px}
 .big b{font:600 30px/1.1 'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
 .big b small{font:500 15px 'IBM Plex Sans',sans-serif;color:var(--tx2);margin-left:4px}
@@ -600,12 +601,19 @@ function lateStat(){
     '<span>post date passed, still not edited</span></div>';
 }
 // Click a number in "This week" and its videos show below it (Harsh, Nov 7)
-var WKVIEW='toedit';
-function pickWk(v){WKVIEW=v;render()}
+var WKVIEW='toedit', WKCR='';
+function pickWk(v){WKVIEW=v;WKCR='';render()}
+// Click a creator under the list to see only their videos; click again (or "All") to clear (Harsh, Nov 14)
+function pickCr(c){WKCR=WKCR===c?'':c;SHOWALL['wk-'+WKVIEW]=false;render()}
+function crChips(counts,extra){
+  var keys=Object.keys(counts).sort(function(a,b){return counts[b].n-counts[a].n});
+  return '<div class="ecr">'+(WKCR?'<span class="crp" onclick="pickCr(\''+esc(WKCR).replace(/'/g,"\\'")+'\')"><b>All</b></span>':'')+keys.map(function(c){
+    return '<span class="crp'+(WKCR===c?' on':'')+'" onclick="pickCr(\''+esc(c).replace(/'/g,"\\'")+'\')"><b>'+esc(c)+' '+counts[c].n+'</b>'+(counts[c].t?' ('+counts[c].t+')':'')+'</span>'}).join('')+'</div>';
+}
 function byCreatorLine(list){
   var who={}; list.forEach(function(v){(who[v.creator]=who[v.creator]||[]).push(v)});
-  return '<div class="ecr">'+Object.keys(who).sort(function(a,b){return who[b].length-who[a].length}).map(function(c){
-    return '<span><b>'+esc(c)+' '+who[c].length+'</b> ('+typeCounts(who[c])+')</span>'}).join('')+'</div>';
+  var counts={}; Object.keys(who).forEach(function(c){counts[c]={n:who[c].length,t:typeCounts(who[c])}});
+  return crChips(counts);
 }
 function postTag(v){var p=pdate(v);if(!p)return['No post date','c-n'];
   if(p<TODAY)return['Was due '+shortDay(p),'c-r'];return[same(p,TODAY)?'Posts today':'Posts '+shortDay(p),v.stage>=9?'c-g':v.stage<=5?'c-r':v.stage===6?'c-n':'c-a']}
@@ -624,14 +632,16 @@ function wkPanel(open){
       var c=x.kind==='Sponsor'?'k-s':x.kind==='Long'?'k-l':'k-p';
       var when=x.at?shortDay(startOfDay(new Date(x.at))):'not in tracker';
       return nrow(x,'Edited '+when,x.untracked?'c-a':'c-g','Edited by '+(x.editor||'no editor set')+(x.untracked?' · not logged in EDIT TRACKER':''),'<span class="k '+c+'">'+esc(x.kind)+'</span>')});
-    var who={};vids.forEach(function(x){who[x.creator]=(who[x.creator]||0)+1});
-    extra='<div class="ecr">'+Object.keys(who).sort(function(a,b){return who[b]-who[a]}).map(function(c){return '<span><b>'+esc(c)+' '+who[c]+'</b></span>'}).join('')+'</div>';
+    var who={};vids.forEach(function(x){who[x.creator]=who[x.creator]||{n:0};who[x.creator].n++});
+    extra=crChips(who);
+    if(WKCR){ var keep=vids.map(function(x){return x.creator===WKCR}); rows=rows.filter(function(r,i){return keep[i]}); title+=' · '+WKCR; }
   } else {
     if(WKVIEW==='making'){ list=open.filter(function(v){return v.stage>=6&&v.stage<=9}); title='Still filming, editing or in review'; sub='planned Mon to Sat this week'; }
     else if(WKVIEW==='planned'){ list=plannedIn(L.w).sort(function(a,b){return pdate(a)-pdate(b)||a.stage-b.stage}); title='All videos planned'; sub=span(L.w.from,L.w.to)+' · '+typeCounts(list).replace(/<[^>]+>/g,''); }
     else if(WKVIEW==='late'){ list=L.late; title='Late: post date passed, still not edited'; sub='last 30 days'; }
     else { list=L.due; title='Videos to edit'; sub=span(L.w.from,L.w.to)+', from scripting to changes'; }
     extra=byCreatorLine(list);
+    if(WKCR){ list=list.filter(function(v){return v.creator===WKCR}); title+=' · '+WKCR; }
     rows=list.map(function(v){var t=postTag(v);return nrow(v,t[0],t[1],stageWord(v),typeChip(v)+(v.format==='Long'?'<span class="k k-l">Long</span>':''))});
   }
   return '<div class="wkhd"><b>'+esc(title)+' · '+rows.length+'</b><span>'+esc(sub)+'</span></div>'+extra+
