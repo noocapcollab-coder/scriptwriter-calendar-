@@ -120,6 +120,12 @@ async function build(fromDay) {
     });
   }
 
+  // Every tracker row from the last 90 days, so a sponsor card that was logged in an
+  // earlier week (FLOVA, POLAR 2, Weglot on 14 Nov) isn't counted again as "not logged".
+  const since90 = new Date(Date.parse(fromISO) - 90 * 864e5).toISOString();
+  const knownTitles = (await queryAll(TRACKER_DS, { timestamp: 'created_time', created_time: { on_or_after: since90 } }))
+    .map(p => titleOf(p.properties || {})).filter(Boolean);
+
   // 2. Creator boards: sponsor cards (to fix mislabelled tracker rows) and
   //    sponsor edits that never reached EDIT TRACKER.
   const sinceBoards = new Date(Date.parse(fromISO) - 30 * 864e5).toISOString();
@@ -143,7 +149,7 @@ async function build(fromDay) {
         const pd = dateP ? Date.parse(dateP[1].date.start.length === 10 ? dateP[1].date.start + 'T12:00:00+05:30' : dateP[1].date.start) : NaN;
         const t = titleOf(pr);
         if (t && st >= 9 && st <= 12 && pd >= Date.parse(fromISO) && pd < Date.parse(toISO)) {
-          boardEdited.push({ title: t, creator: b.creator, editor: plain(byName(pr, /editor/i)), sponsor: isSponsor(pr), long: false, at: null, id: p.id, fromBoard: true });
+          boardEdited.push({ title: t, creator: b.creator, editor: plain(byName(pr, /editor/i)) || 'Milo auto-edit', sponsor: isSponsor(pr), long: false, at: null, id: p.id, fromBoard: true });
         }
         continue;
       }
@@ -156,7 +162,7 @@ async function build(fromDay) {
       const stage = stageOf(plain(statusP));
       const editor = plain(byName(pr, /editor/i));
       if (stage === 9 && editor && p.last_edited_time >= fromISO &&
-          !tracker.some(t => sameVideo(t.title, title))) {
+          !knownTitles.some(t => sameVideo(t, title))) {
         untracked.push({ creator: b.creator, title, editor, stage, id: p.id });
       }
     }
@@ -164,7 +170,11 @@ async function build(fromDay) {
   for (const t of tracker) if (!t.sponsor && sponsorTitles.some(s => sameVideo(s, t.title))) t.sponsor = true;
   tracker.push(...boardEdited);
 
-  const tidy = s => { s = String(s || '').trim(); return s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : ''; };
+  const SAME = { valeri: 'Valerie', 'david iya': 'David', emtech: 'EmTech' };
+  const who = c => SAME[String(c || '').trim().toLowerCase()] || c;
+  for (const t of tracker) t.creator = who(t.creator);
+  for (const u of untracked) u.creator = who(u.creator);
+  const tidy = s => { s = String(s || '').trim(); return /auto-edit/i.test(s) ? s : s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : ''; };
   const byEditor = {};
   for (const t of tracker) { const e = tidy(t.editor) || 'Unassigned'; byEditor[e] = (byEditor[e] || 0) + 1; }
   for (const u of untracked) { const e = tidy(u.editor); byEditor[e] = (byEditor[e] || 0) + 1; }
