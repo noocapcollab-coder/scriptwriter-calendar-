@@ -23,8 +23,9 @@ export const BOARDS = [
   // { creator: 'Nicole',    ds: '25b449d2-35ba-4026-992e-39af9974b158', format: 'Short' },
   // DAVID IYA CONTENT PLANNER, the source board on his dashboard. Pointing at
   // the board itself, because looking it up through the dashboard page broke.
-  // His team schedules on DUE DATE (what his Notion calendar shows), so pin it.
-  { creator: 'David Iya', ds: '898508e9-9dda-8383-ad90-070f01618f5a', format: 'Short', dateProp: 'DUE DATE' },
+  // New topics get their date in POST DATE, like every other board (Harsh, Nov 14). Older cards that only have
+  // DUE DATE still show, because the calendar falls back to any date on the card.
+  { creator: 'David Iya', ds: '898508e9-9dda-8383-ad90-070f01618f5a', format: 'Short', dateProp: 'POST DATE' },
   // AI LEARNS - CONTENT, the source board on the AI LEARNS dashboard (added 31 Oct 2026)
   { creator: 'AI Learns', ds: 'af9dcf07-9aef-4ee1-b627-bbc904dfe227', format: 'Short' }
 ];
